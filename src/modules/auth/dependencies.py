@@ -16,7 +16,8 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.core import decode_access_token, InvalidCredentialsException
+from src.exc import InvalidCredentialsException
+from src.security.security import decode_access_token
 from src.conf import settings
 
 if TYPE_CHECKING:
@@ -69,5 +70,10 @@ async def get_current_user(
     # Step 3: Verify the user is active
     if not user.is_active:
         raise InvalidCredentialsException()
+
+    # Step 4: Verify token security version matches current credential revision
+    token_sec_ver = payload.get("sec_ver")
+    if token_sec_ver is not None and user.security_version != token_sec_ver:
+        raise InvalidCredentialsException("Session credentials have been rotated or revoked.")
 
     return user

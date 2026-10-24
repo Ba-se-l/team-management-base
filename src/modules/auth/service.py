@@ -1,237 +1,260 @@
-"""Authentication domain service layer.
-
-Handles user registration, login (JWT issuance), and token refresh.
-Each function orchestrates calls to ``UserRepository`` and ``core.security``
-without implementing low-level data access itself.
-"""
+"""Authentication domain service implementing hardened token rotation and identity resolution."""
 
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 
-from src.core import (
-    hash_password,
-    verify_password,
+from src.conf import settings
+from src.exc import InvalidCredentialsException, TokenRevokedException
+from src.modules.team.models import Team
+from src.modules.team_members.models import TeamMember
+from src.modules.user.exceptions import UserInactiveException
+from src.modules.user.models import User
+from src.modules.user.repository import UserRepository
+from src.modules.user.schemas import UserResponse
+from src.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
-    InvalidCredentialsException,
-    TokenRevokedException,
+    verify_password,
 )
-from src.conf import settings
-from src.modules.user import User, UserRepository, UserAlreadyExistsException, UserInactiveException
-from .schemas import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest
 from .model import RefreshSession
 from .repo import RefreshSessionRepository
+from .schemas import (
+    LoginRequest,
+    TokenResponse,
+    UserMeMembershipResponse,
+    UserMeResponse,
+)
 
 
-async def _issue_token_pair(
-    user_id: int,
+async def _issue_tokens(
+    user: User,
     session: AsyncSession,
+    family_id: str | None = None,
     device_info: str | None = None,
-) -> TokenResponse:
-    """Creates an access + refresh token pair and persists the refresh session.
+) -> tuple[TokenResponse, str]:
+    """Issues a fresh access token and rotational refresh token, persisting the session.
 
     Args:
-        user_id: The authenticated user's primary key.
-        session: The active database session.
-        device_info: Optional client device identifier.
+        user: Authenticated User model instance.
+        session: Active asynchronous database session.
+        family_id: Optional existing session family UUID string.
+        device_info: Optional client device or user agent string.
 
     Returns:
-        A TokenResponse containing both tokens.
+        A tuple of (TokenResponse, plain_refresh_token_string).
     """
-    # Step 1: Generate access token
-    access_token = create_access_token(user_id=user_id)
+    access_token = create_access_token(
+        user_id=user.id,
+        security_version=user.security_version,
+    )
 
-    # Step 2: Generate refresh token + JTI
-    refresh_token, jti = create_refresh_token(user_id=user_id)
+    refresh_token_str, jti, fam_id = create_refresh_token(
+        user_id=user.id,
+        security_version=user.security_version,
+        family_id=family_id,
+    )
 
-    # Step 3: Persist refresh session to database
     refresh_repo = RefreshSessionRepository(session=session)
     refresh_session = RefreshSession(
-        user_id=user_id,
+        user_id=user.id,
+        family_id=fam_id,
         refresh_token_jti=jti,
         device_info=device_info,
         is_revoked=False,
         expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     )
-    await refresh_repo.create(orm_model=refresh_session)
+    await refresh_repo.create(refresh_session)
     await session.flush()
 
-    return TokenResponse(
+    response_payload = TokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=UserResponse.model_validate(user),
     )
 
-async def register_user(schema: RegisterRequest, session: AsyncSession) -> User:
-    """Registers a new user account.
-
-    Orchestration steps:
-        1. Check if the email is already taken.
-        2. Hash the plain-text password.
-        3. Create the ``User`` ORM instance.
-        4. Persist via ``UserRepository.create``.
-
-    Args:
-        schema: The validated registration request.
-        session: The active database session.
-
-    Returns:
-        The newly created ``User`` ORM instance.
-
-    Raises:
-        UserAlreadyExistsException: If the email is already registered.
-    """
-    user_repo = UserRepository(session=session)
-
-    # Step 1: Check email uniqueness
-    is_user_exist = await user_repo.check_if_exist_by_email(schema.email)
-    if is_user_exist:
-        raise UserAlreadyExistsException(field='email', value=schema.email)
-
-    # Step 2: Hash the password
-    hashed_password = hash_password(plain_password=schema.password)
-
-    now = datetime.now(timezone.utc)
-
-    # Step 3: Build the ORM model
-    orm_model = User(
-        name=schema.name,
-        email=schema.email,
-        hashed_password=hashed_password,
-    )
-
-    # Step 4: Persist with IntegrityError safety net
-    try:
-        user = await user_repo.create(orm_model=orm_model)
-        await session.flush()
-    except IntegrityError:
-        await session.rollback()
-        raise UserAlreadyExistsException(field='email', value=schema.email)
-    
-    return user
+    return response_payload, refresh_token_str
 
 
-async def login_user(schema: LoginRequest, session: AsyncSession) -> TokenResponse:
-    """Authenticates a user and issues a JWT access token.
-
-    Orchestration steps:
-        1. Fetch the user by email.
-        2. Verify the password hash.
-        3. Check that the user account is active.
-        4. Generate and return the JWT access token.
+async def login_user(
+    schema: LoginRequest,
+    session: AsyncSession,
+    device_info: str | None = None,
+) -> tuple[TokenResponse, str]:
+    """Authenticates credentials, verifies status, and establishes a new token session.
 
     Args:
-        schema: The validated login request containing email and password.
-        session: The active database session.
+        schema: Validated login request.
+        session: Active asynchronous database session.
+        device_info: Optional client device descriptor.
 
     Returns:
-        A ``TokenResponse`` containing the JWT ``access_token``.
+        Tuple of (TokenResponse, refresh_token_str).
 
     Raises:
-        InvalidCredentialsException: If the email or password is wrong.
-        UserInactiveException: If the user account is deactivated.
+        InvalidCredentialsException: If password or email is incorrect.
+        UserInactiveException: If user account is disabled.
     """
     user_repo = UserRepository(session=session)
-
-    # Step 1: Fetch user by email
     user = await user_repo.get_by_email(schema.email)
-    if user is None:
-        raise InvalidCredentialsException()
 
-    # Step 2: Verify the password
-    is_hashed_match = verify_password(
-        plain_password=schema.password,
-        hashed_password=user.hashed_password,
-    )
-    if not is_hashed_match:
-        raise InvalidCredentialsException()
+    if user is None or not verify_password(schema.password, user.hashed_password):
+        raise InvalidCredentialsException("Invalid email or password.")
 
-    # Step 3: Verify the account is active
     if not user.is_active:
         raise UserInactiveException(identifier=str(user.id))
 
-    # Step 4: Issue dual token pair
-    return await _issue_token_pair(user_id=user.id, session=session)
+    return await _issue_tokens(
+        user=user,
+        session=session,
+        device_info=device_info,
+    )
 
 
-
-async def logout(refresh_token_str: str, session: AsyncSession) -> None:
-    """Revokes a single refresh session (logout current device).
-
-    Args:
-        refresh_token_str: The refresh token to revoke.
-        session: The active database session.
-
-    Raises:
-        InvalidCredentialsException: If the token is malformed.
-    """
-    payload = decode_refresh_token(token=refresh_token_str)
-    jti = payload['jti']
-
-    refresh_repo = RefreshSessionRepository(session=session)
-    await refresh_repo.revoke_by_jti(jti=jti)
-
-
-async def logout_all(user_id: int, session: AsyncSession) -> None:
-    """Revokes all refresh sessions for a user (logout all devices).
+async def refresh_token(
+    refresh_token_str: str,
+    session: AsyncSession,
+    device_info: str | None = None,
+) -> tuple[TokenResponse, str]:
+    """Exchanges a valid refresh token for a new pair with reuse attack detection.
 
     Args:
-        user_id: The user's primary key.
-        session: The active database session.
-    """
-    refresh_repo = RefreshSessionRepository(session=session)
-    await refresh_repo.revoke_all_for_user(user_id=user_id)
-
-
-async def refresh_token(schema: RefreshRequest, session: AsyncSession) -> TokenResponse:
-    """Exchanges a valid refresh token for a new token pair (rotation).
-
-    Rotation Protocol:
-        1. Decode the refresh token to extract the JTI.
-        2. Look up the refresh session in the database.
-        3. Verify the session exists, is not revoked, and not expired.
-        4. Revoke the old refresh session.
-        5. Issue a fresh token pair.
-
-    Args:
-        schema: The request containing the current refresh token.
-        session: The active database session.
+        refresh_token_str: Raw JWT refresh token string.
+        session: Active asynchronous database session.
+        device_info: Optional client device descriptor.
 
     Returns:
-        A new TokenResponse with fresh access + refresh tokens.
+        Tuple of (TokenResponse, new_refresh_token_str).
 
     Raises:
-        InvalidCredentialsException: If the token is malformed or expired.
-        TokenRevokedException: If the session is revoked or not found.
+        InvalidCredentialsException: If token is malformed, replayed, or security version changed.
+        TokenRevokedException: If session was revoked or expired.
     """
-    # Step 1: Decode the refresh token
-    payload = decode_refresh_token(token=schema.refresh_token)
-    user_id = int(payload['sub'])
-    jti = payload['jti']
+    payload = decode_refresh_token(refresh_token_str)
+    user_id = int(payload["sub"])
+    jti = payload["jti"]
+    token_sec_ver = payload.get("sec_ver")
 
-    # Step 2: Look up the session
     refresh_repo = RefreshSessionRepository(session=session)
     existing_session = await refresh_repo.get_by_jti(jti=jti)
 
-    # Step 3: Validate the session
     if existing_session is None:
-        raise TokenRevokedException()
+        raise TokenRevokedException("Refresh token session was not found.")
 
+    # Token Reuse Attack Detection: if already revoked, compromise detected!
     if existing_session.is_revoked:
-        # Potential token theft — revoke all sessions for this user
-        await refresh_repo.revoke_all_for_user(user_id=user_id)
-        raise TokenRevokedException()
+        if existing_session.family_id:
+            await refresh_repo.revoke_family(existing_session.family_id)
+        else:
+            await refresh_repo.revoke_all_for_user(user_id=user_id)
+        await session.commit()
+        raise InvalidCredentialsException(
+            "Revoked refresh token replay detected. All sessions in this lineage have been terminated."
+        )
 
+    # Check expiration
     expires_at = existing_session.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
     if expires_at < datetime.now(timezone.utc):
-        raise TokenRevokedException()
+        await refresh_repo.revoke_by_jti(jti=jti)
+        await session.flush()
+        raise TokenRevokedException("Refresh token has expired.")
 
-    # Step 4: Revoke the old session (rotation)
+    # Verify user state & security version
+    user_repo = UserRepository(session=session)
+    user = await user_repo.get_by_id(user_id)
+
+    if user is None or not user.is_active:
+        raise InvalidCredentialsException("User account is inactive or not found.")
+
+    if token_sec_ver is not None and user.security_version != token_sec_ver:
+        if existing_session.family_id:
+            await refresh_repo.revoke_family(existing_session.family_id)
+        else:
+            await refresh_repo.revoke_all_for_user(user_id=user_id)
+        await session.flush()
+        raise InvalidCredentialsException("Credentials have been rotated. Please log in again.")
+
+    # Rotate token: revoke old token and create new session in same family
     await refresh_repo.revoke_by_jti(jti=jti)
 
-    # Step 5: Issue a fresh pair
-    return await _issue_token_pair(user_id=user_id, session=session)
+    return await _issue_tokens(
+        user=user,
+        session=session,
+        family_id=existing_session.family_id,
+        device_info=device_info,
+    )
+
+
+async def logout(refresh_token_str: str, session: AsyncSession) -> None:
+    """Revokes the specified refresh token session.
+
+    Args:
+        refresh_token_str: Raw JWT refresh token string to revoke.
+        session: Active asynchronous database session.
+    """
+    try:
+        payload = decode_refresh_token(refresh_token_str)
+        jti = payload.get("jti")
+        if jti:
+            refresh_repo = RefreshSessionRepository(session=session)
+            await refresh_repo.revoke_by_jti(jti=jti)
+            await session.flush()
+    except Exception:
+        # Logout is idempotent: fail silently on invalid token structure
+        pass
+
+
+async def logout_all(user_id: int, session: AsyncSession) -> None:
+    """Revokes all active refresh token sessions for the given user.
+
+    Args:
+        user_id: Target user integer primary key.
+        session: Active asynchronous database session.
+    """
+    refresh_repo = RefreshSessionRepository(session=session)
+    await refresh_repo.revoke_all_for_user(user_id=user_id)
+    await session.flush()
+
+
+async def get_user_me(user: User, session: AsyncSession) -> UserMeResponse:
+    """Retrieves full profile and active team workspace memberships for the requester.
+
+    Args:
+        user: Current authenticated User.
+        session: Active asynchronous database session.
+
+    Returns:
+        UserMeResponse containing user profile and list of team memberships.
+    """
+    stmt = (
+        select(TeamMember, Team)
+        .join(Team, Team.id == TeamMember.team_id)
+        .where(
+            TeamMember.member_id == user.id,
+            TeamMember.is_active.is_(True),
+            Team.is_active.is_(True),
+        )
+    )
+    result = await session.execute(stmt)
+
+    memberships: list[UserMeMembershipResponse] = []
+    for member, team in result.all():
+        role_val = member.role.value if hasattr(member.role, "value") else str(member.role)
+        memberships.append(
+            UserMeMembershipResponse(
+                team_id=team.id,
+                team_name=team.name,
+                team_slug=team.slug,
+                role=role_val,
+            )
+        )
+
+    return UserMeResponse(
+        user=UserResponse.model_validate(user),
+        memberships=memberships,
+    )

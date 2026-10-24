@@ -43,20 +43,24 @@ class ChangePasswordRequest(BaseModel):
 
 
 class UserResponse(BaseModel):
-    """Schema for user data in API responses, Exclude sensitive fields"""
+    """Schema for user data in API responses, excluding sensitive fields."""
 
-    # To enable ORM validate -> ModelClass.model_validate(orm_instance)
     model_config = ConfigDict(from_attributes=True)
-
 
     id: int
     name: str
+    username: str
     email: str
+    avatar_url: str | None = None
+    bio: str | None = None
+    github_url: str | None = None
+    linkedin_url: str | None = None
+    website_url: str | None = None
     is_active: bool
     is_super_admin: bool
     status: UserStatus
-    job_title: JobTitle | None
-    bio: str | None
+    job_title: JobTitle | None = None
+    security_version: int = 1
     created_at: datetime
     updated_at: datetime
 

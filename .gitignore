@@ -8,6 +8,14 @@ wheels/
 .env
 .venv/
 .storage/
-.docs/
-# Virtual environments
-.venv
+.docs
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Test & coverage caches
+.pytest_cache/
+.coverage
+htmlcov/
+

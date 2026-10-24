@@ -1,83 +1,97 @@
 /**
- * @fileoverview Parent UI Module
- * Handles DOM manipulation, Toasts, and Modals.
+ * @fileoverview UI Controller & Helpers
+ * Manages Toast notifications, Modal dialogs, and component rendering helpers.
  */
 
+/**
+ * Displays a non-blocking toast notification.
+ * 
+ * @param {string} message - Toast message text
+ * @param {'success'|'error'|'info'} [type='success'] - Toast level
+ */
 function showToast(message, type = 'success') {
-    const container = document.getElementById('toast-container');
-    if (!container) return;
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
 
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    
-    const icon = document.createElement('span');
-    icon.className = 'material-icons-round';
-    icon.textContent = type === 'success' ? 'check_circle' : 'error';
-    
-    const text = document.createElement('span');
-    text.textContent = message;
+    toast.className = `toast toast-${type}`;
 
-    toast.appendChild(icon);
-    toast.appendChild(text);
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'material-icons-round';
+    iconSpan.textContent = type === 'success' ? 'check_circle' : type === 'error' ? 'error_outline' : 'info';
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = message;
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(textSpan);
     container.appendChild(toast);
 
     setTimeout(() => {
-        toast.style.animation = 'slideUp 0.3s ease reverse forwards';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(60px)';
+        toast.style.transition = 'all 0.3s ease';
         setTimeout(() => toast.remove(), 300);
     }, 4000);
 }
 
-function updateAuthStatusUI(isAuthenticated, email = '') {
-    const display = document.getElementById('user-email-display');
-    const authStatus = document.getElementById('auth-status');
-    const btnLogout = document.getElementById('btn-logout');
-    
-    if (isAuthenticated) {
-        display.textContent = email;
-        authStatus.style.color = 'var(--clr-primary)';
-        if (btnLogout) btnLogout.style.display = 'inline-block';
-    } else {
-        display.textContent = 'Not Authenticated';
-        authStatus.style.color = 'var(--clr-text-muted)';
-        if (btnLogout) btnLogout.style.display = 'none';
+/**
+ * Opens a modal dialog by ID.
+ * 
+ * @param {string} modalId - Element ID of the modal overlay
+ */
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.add('open');
     }
 }
 
-function renderJsonToElement(data, elementId) {
-    const el = document.getElementById(elementId);
-    if (el) {
-        el.textContent = JSON.stringify(data, null, 2);
+/**
+ * Closes a modal dialog by ID.
+ * 
+ * @param {string} modalId - Element ID of the modal overlay
+ */
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.classList.remove('open');
     }
 }
 
-/* =========================================================
-   Modal Management
-   ========================================================= */
-
-function openModal(templateId, initCallback = null) {
-    const overlay = document.getElementById('global-modal-overlay');
-    const contentBox = document.getElementById('global-modal-content');
-    const tpl = document.getElementById(templateId);
-    
-    if (!tpl) {
-        console.error("Template not found:", templateId);
-        return;
-    }
-
-    // Clear previous and inject new content
-    contentBox.innerHTML = '';
-    const clone = tpl.content.cloneNode(true);
-    contentBox.appendChild(clone);
-    
-    overlay.classList.add('active');
-
-    // Run custom initialization if provided (e.g. setting hidden fields)
-    if (initCallback) {
-        initCallback();
+/**
+ * Formats an ISO datetime string into human readable format.
+ * 
+ * @param {string|null} isoStr - ISO 8601 string
+ * @returns {string} Formatted date
+ */
+function formatDate(isoStr) {
+    if (!isoStr) return 'N/A';
+    try {
+        const d = new Date(isoStr);
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+        return isoStr;
     }
 }
 
-function closeModal() {
-    const overlay = document.getElementById('global-modal-overlay');
-    overlay.classList.remove('active');
+/**
+ * Returns initials from a full name.
+ * 
+ * @param {string} name - Full user name
+ * @returns {string} Uppercase initials (e.g. "JD")
+ */
+function getInitials(name) {
+    if (!name) return '??';
+    return name.split(' ')
+        .map(n => n[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
 }

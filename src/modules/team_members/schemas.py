@@ -1,35 +1,36 @@
-from pydantic import BaseModel, ConfigDict, Field
+"""Team member domain request and response Pydantic schemas."""
+
 from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
 
-
-from src.database import UserRoles
+from src.database.enums import TeamRole
 
 
 class AddMemberRequest(BaseModel):
+    """Schema for adding an existing developer to a team workspace."""
 
     user_id: int
-    """UUID of the user to add to the team"""
-
-    role: UserRoles = Field(default=UserRoles.DEVELOPER)
-    """Role to assign to the new member"""
+    role: TeamRole = Field(default=TeamRole.DEVELOPER)
 
 
 class UpdateMemberRoleRequest(BaseModel):
+    """Schema for modifying a team member's role."""
 
-    role: UserRoles
-    """The new role to assign"""
+    role: TeamRole
+
 
 class MemberResponse(BaseModel):
+    """Detailed response schema representing a team member."""
 
-    # To enable ORM validate -> ModelClass.model_validate(orm_instance)
     model_config = ConfigDict(from_attributes=True)
 
     member_id: int
     team_id: int
-    role: UserRoles
+    role: TeamRole
     is_active: bool
     joined_at: datetime
-
-
-
-
+    name: str | None = None
+    username: str | None = None
+    email: str | None = None
+    avatar_url: str | None = None
+    job_title: str | None = None

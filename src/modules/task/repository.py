@@ -1,61 +1,170 @@
-from sqlalchemy import select
+"""Task domain repository managing Kanban items and discussion comments."""
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
+from sqlalchemy.orm import selectinload
 
 from src.database import BaseRepository
-from src.database import TaskStatus
-from src.modules.task.models import Task
-
+from src.database.enums import TaskStatus
+from src.modules.task.models import Task, TaskComment
+from src.share.responses import PageResult
 
 
 class TaskRepository(BaseRepository[Task]):
-    def __init__(self, session:AsyncSession):
+    """Data repository for Task entities and task discussion threads."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initializes with the Task model.
+
+        Args:
+            session: Active asynchronous database session.
+        """
         super().__init__(model=Task, session=session)
 
-    async def get_project_tasks(self, project_id: ID, skip: int = 0, limit: int = 20) -> list[Task]:
-        """Retrives all active tasks belonging to a specific project"""
+    async def get_task_with_details(self, task_id: int) -> Task | None:
+        """Retrieves a single task with author, assignee, and comments with author info.
 
+        Args:
+            task_id: Task integer primary key.
+
+        Returns:
+            Task instance or None.
+        """
         stmt = (
             select(Task)
+            .options(
+                selectinload(Task.created_by),
+                selectinload(Task.assignee_to),
+                selectinload(Task.comments).selectinload(TaskComment.author),
+            )
+            .where(Task.id == task_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
+
+    async def get_project_tasks_ordered(self, project_id: int) -> list[Task]:
+        """Retrieves all active tasks for a project ordered by column position for Kanban rendering.
+
+        Args:
+            project_id: Owning project integer ID.
+
+        Returns:
+            List of Task instances with relationships loaded.
+        """
+        stmt = (
+            select(Task)
+            .options(
+                selectinload(Task.created_by),
+                selectinload(Task.assignee_to),
+                selectinload(Task.comments).selectinload(TaskComment.author),
+            )
             .where(
                 Task.project_id == project_id,
-                Task.is_active.is_(True)
+                Task.is_active.is_(True),
             )
-            .offset(skip)
-            .limit(limit)
+            .order_by(Task.position.asc(), Task.id.asc())
         )
-
         result = await self.session.execute(stmt)
-
         return list(result.scalars().all())
-    
 
-    async def get_user_assigned_tasks(self, user_id: ID, skip:int = 0, limit:int = 20) -> list[Task]:
-        """Retrives all tasks assigned to a specific user across all projects"""
+    async def get_next_position(self, project_id: int, status: TaskStatus) -> float:
+        """Calculates the next position value for appending a task to a status column.
+
+        Args:
+            project_id: Project integer ID.
+            status: Target workflow status column.
+
+        Returns:
+            Calculated float position.
+        """
+        stmt = select(func.max(Task.position)).where(
+            Task.project_id == project_id,
+            Task.status == status,
+            Task.is_active.is_(True),
+        )
+        max_pos = await self.session.scalar(stmt)
+        return float(max_pos + 1000.0) if max_pos is not None else 1000.0
+
+    async def paginate_project_tasks(
+        self,
+        project_id: int,
+        status: TaskStatus | None = None,
+        offset: int = 0,
+        limit: int = 20,
+    ) -> PageResult[Task]:
+        """Retrieves paginated tasks for a project with optional status filtering.
+
+        Args:
+            project_id: Project integer ID.
+            status: Optional TaskStatus filter.
+            offset: Record offset.
+            limit: Limit per page.
+
+        Returns:
+            PageResult of Task instances.
+        """
         stmt = (
             select(Task)
-            .where(Task.assignee_to_id == user_id)
-            .offset(skip)
-            .limit(limit)
-        )
-
-        result = await self.session.execute(stmt)
-
-        return list(result.scalars().all())
-    
-
-    async def get_tasks_by_status(self, project_id: ID, status: TaskStatus, skip: int = 0, limit : int = 20) -> list[Task]:
-        """Retrives tasks filtered by status within a project"""
-        stmt = (
-            select(Task)
+            .options(
+                selectinload(Task.created_by),
+                selectinload(Task.assignee_to),
+                selectinload(Task.comments).selectinload(TaskComment.author),
+            )
             .where(
                 Task.project_id == project_id,
-                Task.status == status
+                Task.is_active.is_(True),
             )
-            .offset(skip)
-            .limit(limit)
+            .order_by(Task.position.asc(), Task.id.desc())
         )
 
-        result = await self.session.execute(stmt)
+        if status is not None:
+            stmt = stmt.where(Task.status == status)
 
-        return list(result.scalars().all())
+        return await self.paginate(stmt, offset=offset, limit=limit)
+
+    async def add_comment(self, task_id: int, author_id: int, content: str) -> TaskComment:
+        """Creates and flushes a new comment attached to a task.
+
+        Args:
+            task_id: Target task integer ID.
+            author_id: Author user integer ID.
+            content: Textual comment content.
+
+        Returns:
+            Created TaskComment.
+        """
+        comment = TaskComment(
+            task_id=task_id,
+            author_id=author_id,
+            content=content,
+        )
+        self.session.add(comment)
+        await self.session.flush()
+        await self.session.refresh(comment, attribute_names=["author"])
+        return comment
+
+    async def get_comment(self, comment_id: int) -> TaskComment | None:
+        """Retrieves a single task comment by primary key.
+
+        Args:
+            comment_id: Comment integer ID.
+
+        Returns:
+            TaskComment or None.
+        """
+        stmt = (
+            select(TaskComment)
+            .options(selectinload(TaskComment.author))
+            .where(TaskComment.id == comment_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().first()
+
+    async def delete_comment(self, comment: TaskComment) -> None:
+        """Deletes a task comment record.
+
+        Args:
+            comment: TaskComment instance to delete.
+        """
+        await self.session.delete(comment)
+        await self.session.flush()

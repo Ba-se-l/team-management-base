@@ -8,7 +8,8 @@ to ``UserRepository`` and applies domain rules.
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID as ID
 
-from src.core import hash_password, verify_password, InvalidCredentialsException
+from src.exc import InvalidCredentialsException
+from src.security import hash_password, verify_password
 from src.database import UserStatus
 from .models import User
 from .schemas import UpdateSchemaRequest, ChangePasswordRequest

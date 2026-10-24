@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID as ID
 from typing import Sequence
 
-from src.core import AlreadyExistsException
+from src.exc import AlreadyExistsException
 from src.modules.user import User
 from src.modules.team_members import InsufficientRoleException
 from .models import Technology

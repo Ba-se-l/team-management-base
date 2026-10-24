@@ -1,4 +1,4 @@
-from src.core import (
+from src.exc import (
     NotFoundException,
     AlreadyExistsException,
     InactiveEntityException

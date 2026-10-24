@@ -64,4 +64,20 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         )
         await self.session.execute(stmt)
 
+    async def revoke_family(self, family_id: str) -> None:
+        """Revokes all sessions belonging to a specific session family.
+
+        Used when token replay attacks are detected.
+
+        Args:
+            family_id: The session family identifier.
+        """
+        stmt = (
+            update(RefreshSession)
+            .where(RefreshSession.family_id == family_id)
+            .values(is_revoked=True)
+        )
+        await self.session.execute(stmt)
+
+
 

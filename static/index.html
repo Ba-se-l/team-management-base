@@ -3,533 +3,484 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Managemnt Platform - API Test Sandbox</title>
-
-    <!-- Google Fonts: Inter -->
+    <title>DevStation Platform // Enterprise Full-Stack Engineering Guild</title>
+    <meta name="description" content="Production-ready developer workspace, showcase portal, and sprint management platform for high-velocity software engineering teams.">
+    
+    <!-- Google Fonts: Inter & Outfit -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Google Material Icons (Round) -->
+    <!-- Google Material Icons Round -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 
-    <!-- Application Styles -->
+    <!-- Stylesheet -->
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
 
-    <!-- Top App Bar -->
-    <header class="app-bar">
-        <div class="logo">
-            <span class="material-icons-round logo-icon">api</span>
-            <span>Team Managemnt Platform Sandbox</span>
+    <!-- =======================================================================
+         TOP APPLICATION HEADER
+         ======================================================================= -->
+    <header class="app-header">
+        <div class="brand-wrapper" id="brand-home-link">
+            <div class="brand-icon-box">
+                <span class="material-icons-round">hub</span>
+            </div>
+            <div class="brand-title">DEVSTATION <span style="color: var(--primary-light); font-weight: 400;">// BASE</span></div>
         </div>
-        <div class="auth-status" id="auth-status">
-            <span class="material-icons-round">account_circle</span>
-            <span id="user-email-display">Not Authenticated</span>
-            <button id="btn-logout" class="btn btn-secondary" style="margin-left: 12px; display: none; padding: 4px 8px; font-size: 12px;">Logout</button>
-        </div>
-    </header>
 
-    <div class="layout-wrapper">
-        <!-- Sidebar Navigation -->
-        <nav class="sidebar">
-            <button type="button" class="nav-btn active" data-target="auth-view">
-                <span class="material-icons-round">lock</span> Authentication
+        <!-- Dual Mode Switcher -->
+        <nav class="mode-toggle" aria-label="Portal Mode">
+            <button type="button" class="mode-btn active" id="btn-mode-showcase">
+                <span class="material-icons-round">public</span> Showcase Portal
             </button>
-            <button type="button" class="nav-btn" data-target="users-view">
-                <span class="material-icons-round">person</span> Users
-            </button>
-            <button type="button" class="nav-btn" data-target="teams-view">
-                <span class="material-icons-round">group</span> Teams
-            </button>
-            <button type="button" class="nav-btn" data-target="projects-view">
-                <span class="material-icons-round">folder</span> Projects
-            </button>
-            <button type="button" class="nav-btn" data-target="tasks-view">
-                <span class="material-icons-round">task_alt</span> Tasks
-            </button>
-            <button type="button" class="nav-btn" data-target="tech-view">
-                <span class="material-icons-round">memory</span> Technology
+            <button type="button" class="mode-btn" id="btn-mode-workspace">
+                <span class="material-icons-round">dashboard</span> Workspace Kanban
             </button>
         </nav>
 
-        <!-- Main Content Area -->
-        <main class="content-area">
-            
-            <!-- Auth View -->
-            <section id="auth-view" class="view-section active">
-                <h2>Authentication Sandbox</h2>
-                <div class="card-grid">
-                    <div class="card">
-                        <h3><span class="material-icons-round">login</span> Login</h3>
-                        <form id="form-login">
-                            <div class="form-group">
-                                <label>Email</label>
-                                <input type="email" id="login-email" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Password</label>
-                                <input type="password" id="login-password" required>
-                            </div>
-                            <button type="submit" class="btn btn-primary">Login</button>
-                        </form>
-                    </div>
-                    
-                    <div class="card">
-                        <h3><span class="material-icons-round">person_add</span> Register</h3>
-                        <form id="form-register">
-                            <div class="form-group">
-                                <label>Name</label>
-                                <input type="text" id="reg-name" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Email</label>
-                                <input type="email" id="reg-email" required>
-                            </div>
-                            <div class="form-group">
-                                <label>Password</label>
-                                <input type="password" id="reg-password" required>
-                            </div>
-                            <button type="submit" class="btn btn-secondary">Register</button>
-                        </form>
-                    </div>
-                </div>
-            </section>
+        <!-- User Controls / Quick Auth -->
+        <div class="header-actions">
+            <div class="user-badge" id="user-badge-display">
+                <div class="avatar-dot" id="user-status-dot"></div>
+                <span id="user-display-name">Guest Visitor</span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-open-auth">
+                <span class="material-icons-round">account_circle</span> <span id="auth-btn-label">Sign In</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-logout" style="display: none;">
+                <span class="material-icons-round">logout</span>
+            </button>
+        </div>
+    </header>
 
-            <!-- Users View -->
-            <section id="users-view" class="view-section">
-                <div class="header-actions">
-                    <h2>Users Management</h2>
-                    <div>
-                        <button type="button" class="btn btn-secondary" onclick="openModal('modal-update-profile')"><span class="material-icons-round">edit</span> Update Profile</button>
-                        <button type="button" class="btn btn-secondary" onclick="openModal('modal-change-password')"><span class="material-icons-round">key</span> Change Password</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <button type="button" class="btn btn-primary" id="btn-fetch-me"><span class="material-icons-round">sync</span> Fetch My Profile</button>
-                    <pre class="json-display" id="user-profile-json">No data yet...</pre>
-                </div>
-            </section>
+    <!-- =======================================================================
+         VIEW 1: PUBLIC SHOWCASE PORTAL
+         ======================================================================= -->
+    <main id="view-showcase" class="showcase-container">
+        <!-- Hero Section -->
+        <section class="hero-section">
+            <div class="hero-badge">
+                <span class="material-icons-round" style="font-size: 16px;">verified</span> Enterprise Engineering Platform
+            </div>
+            <h1 class="hero-title">Architecting Resilient Platforms<br><span>& High-Velocity Teams</span></h1>
+            <p class="hero-subtitle">
+                We design, build, and scale mission-critical digital infrastructure using modern asynchronous Python, distributed architectures, and rigorous engineering practices.
+            </p>
+            <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
+                <a href="#inquiry-section" class="btn btn-primary" id="btn-hero-consult">
+                    <span class="material-icons-round">send</span> Start Consultation
+                </a>
+                <button type="button" class="btn btn-secondary" id="btn-hero-workspace">
+                    <span class="material-icons-round">view_kanban</span> Open Live Workspace
+                </button>
+            </div>
+        </section>
 
-            <!-- Teams View -->
-            <section id="teams-view" class="view-section">
-                <div class="header-actions">
-                    <h2>Teams Management</h2>
-                    <button type="button" class="btn btn-primary" onclick="openModal('modal-create-team')"><span class="material-icons-round">add</span> Create Team</button>
-                </div>
-                <div class="card">
-                    <button type="button" class="btn btn-secondary" id="btn-fetch-teams"><span class="material-icons-round">sync</span> Refresh Teams</button>
-                    <div id="teams-list" class="data-list"></div>
-                </div>
-            </section>
+        <!-- Live Metrics Strip -->
+        <section class="stats-strip" id="stats-strip" aria-label="Live Platform Metrics">
+            <div class="stat-card">
+                <div class="stat-num" id="stat-projects">-</div>
+                <div class="stat-label">Active Projects</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-teams">-</div>
+                <div class="stat-label">Engineering Guilds</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-members">-</div>
+                <div class="stat-label">Staff Engineers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-tasks">-</div>
+                <div class="stat-label">Tracked Sprints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="stat-techs">-</div>
+                <div class="stat-label">Technologies</div>
+            </div>
+        </section>
 
-            <!-- Team Details View (Dashboard) -->
-            <section id="team-details-view" class="view-section">
-                <div class="header-actions">
-                    <h2><span class="material-icons-round" style="vertical-align: middle;">dashboard</span> <span id="tdv-team-name">Team Dashboard</span></h2>
-                    <div>
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('btn-fetch-teams').click(); document.querySelector('.nav-btn[data-target=\'teams-view\']').click();"><span class="material-icons-round">arrow_back</span> Back to Teams</button>
-                        <button type="button" class="btn btn-primary" id="btn-tdv-manage-projects" style="margin-right: 8px;"><span class="material-icons-round">folder</span> Manage Projects</button>
-                        <button type="button" class="btn btn-primary" id="btn-tdv-add-member"><span class="material-icons-round">person_add</span> Add Member</button>
-                    </div>
+        <!-- Project Portfolio Showcase -->
+        <section style="margin-bottom: 64px;">
+            <div class="section-header">
+                <div>
+                    <h2>Featured Deployments & Systems</h2>
+                    <p>Production applications, microservices, and platforms delivered by our engineering guild.</p>
                 </div>
-                
-                <div class="card" style="margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3>Members Directory</h3>
-                        <button type="button" class="btn btn-secondary" id="btn-tdv-refresh-members"><span class="material-icons-round">sync</span> Refresh Members</button>
-                    </div>
-                    
-                    <!-- Members Table -->
-                    <div style="overflow-x: auto; margin-top: 16px;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid var(--clr-border);">
-                                    <th style="padding: 12px;">User ID</th>
-                                    <th style="padding: 12px;">Name</th>
-                                    <th style="padding: 12px;">Role</th>
-                                    <th style="padding: 12px;">Status</th>
-                                    <th style="padding: 12px;">Joined At</th>
-                                    <th style="padding: 12px; text-align: right;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tdv-members-table-body">
-                                <!-- JS Injected Rows -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
+            </div>
 
-            <!-- Projects View -->
-            <section id="projects-view" class="view-section">
-                <div class="header-actions">
-                    <h2>Projects Management <small style="font-size:14px;color:var(--clr-text-muted);font-weight:normal;" id="active-team-id-display">No Team Selected</small></h2>
-                    <button type="button" class="btn btn-primary" id="btn-trigger-create-project" onclick="openModal('tpl-create-project')" disabled><span class="material-icons-round">add</span> Create Project</button>
-                </div>
-                <div class="card">
-                    <button type="button" class="btn btn-secondary" id="btn-fetch-projects" disabled><span class="material-icons-round">sync</span> Refresh Projects</button>
-                    <div id="projects-list" class="data-list"></div>
-                </div>
-            </section>
+            <!-- Technology Filter Bar -->
+            <div class="tech-tag-row" id="tech-filter-bar" style="margin-bottom: 24px;">
+                <button type="button" class="btn btn-sm btn-primary filter-tech-btn active" data-slug="">All Technologies</button>
+                <!-- Populated dynamically via JS -->
+            </div>
 
-            <!-- Project Details View (Dashboard) -->
-            <section id="project-details-view" class="view-section">
-                <div class="header-actions">
-                    <h2><span class="material-icons-round" style="vertical-align: middle;">domain</span> <span id="pdv-project-title">Project Dashboard</span></h2>
-                    <div>
-                        <button type="button" class="btn btn-secondary" onclick="document.getElementById('btn-fetch-projects').click(); document.querySelector('.nav-btn[data-target=\'projects-view\']').click();"><span class="material-icons-round">arrow_back</span> Back to Projects</button>
-                        <button type="button" class="btn btn-secondary" id="btn-pdv-edit-project"><span class="material-icons-round">edit</span> Edit Project</button>
-                        <button type="button" class="btn btn-primary" id="btn-pdv-create-task"><span class="material-icons-round">add_task</span> Create Task</button>
-                    </div>
+            <!-- Projects Grid -->
+            <div class="projects-grid" id="showcase-projects-grid">
+                <!-- Dynamically injected project cards -->
+            </div>
+        </section>
+
+        <!-- Engineering Roster -->
+        <section style="margin-bottom: 72px;">
+            <div class="section-header">
+                <div>
+                    <h2>Engineering Leadership & Team Roster</h2>
+                    <p>Meet our core architects, staff engineers, and systems developers.</p>
                 </div>
-                
-                <div class="card" style="margin-bottom: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h3>Project Info</h3>
+            </div>
+            <div class="members-grid" id="showcase-team-grid">
+                <!-- Dynamically injected member cards -->
+            </div>
+        </section>
+
+        <!-- Client Inquiry & Consultation Form -->
+        <section id="inquiry-section" style="margin-bottom: 40px;">
+            <div class="inquiry-card">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <span class="material-icons-round" style="font-size: 36px; color: var(--primary-light);">contact_support</span>
+                    <h2 style="font-size: 26px; margin-top: 6px;">Initiate a Technical Consultation</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
+                        Connect with our solutions architects to discuss custom platform architecture or dedicated team augmentation.
+                    </p>
+                </div>
+
+                <form id="form-inquiry">
+                    <!-- Bot Honeypot field (hidden from legitimate users, traps spam bots) -->
+                    <div style="display: none;" aria-hidden="true">
+                        <label for="honeypot-field">Leave blank</label>
+                        <input type="text" id="honeypot-field" name="company_website" tabindex="-1" autocomplete="off">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                        <div>
-                            <p style="color:var(--clr-text-muted); font-size:12px;">Description</p>
-                            <p id="pdv-desc" style="font-size:14px;">-</p>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="inq-name">Your Full Name *</label>
+                            <input type="text" id="inq-name" class="form-input" placeholder="Sarah Connor" required>
                         </div>
-                        <div>
-                            <p style="color:var(--clr-text-muted); font-size:12px;">Status & Deadline</p>
-                            <p style="font-size:14px;"><span id="pdv-status" style="background:#e8f0fe; color:var(--clr-primary); padding:2px 6px; border-radius:4px; font-weight:500;">-</span> | Deadline: <span id="pdv-deadline">-</span></p>
+                        <div class="form-group">
+                            <label for="inq-email">Work Email *</label>
+                            <input type="email" id="inq-email" class="form-input" placeholder="sarah@cyberdyne.io" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="inq-company">Company / Organization</label>
+                            <input type="text" id="inq-company" class="form-input" placeholder="Cyberdyne Systems">
+                        </div>
+                        <div class="form-group">
+                            <label for="inq-budget">Estimated Budget</label>
+                            <select id="inq-budget" class="form-select">
+                                <option value="">Select scope</option>
+                                <option value="$10,000 - $25,000">$10,000 - $25,000</option>
+                                <option value="$25,000 - $50,000">$25,000 - $50,000</option>
+                                <option value="$50,000 - $100,000">$50,000 - $100,000</option>
+                                <option value="$100,000+">$100,000+</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="inq-message">Project Scope & Technical Requirements *</label>
+                            <textarea id="inq-message" class="form-textarea" rows="4" placeholder="Briefly describe your technical objectives, stack preferences, and delivery timeline..." required></textarea>
                         </div>
                     </div>
 
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--clr-border); padding-top: 16px;">
-                        <h3>Tasks Board</h3>
-                        <button type="button" class="btn btn-secondary" id="btn-pdv-refresh-tasks"><span class="material-icons-round">sync</span> Refresh Tasks</button>
+                    <div style="text-align: right; margin-top: 12px;">
+                        <button type="submit" class="btn btn-primary" id="btn-submit-inquiry" style="width: 100%;">
+                            <span class="material-icons-round">send</span> Transmit Consultation Request
+                        </button>
                     </div>
-                    
-                    <!-- Tasks Table -->
-                    <div style="overflow-x: auto; margin-top: 16px;">
-                        <table style="width: 100%; border-collapse: collapse; text-align: left;">
-                            <thead>
-                                <tr style="border-bottom: 2px solid var(--clr-border);">
-                                    <th style="padding: 12px;">Title</th>
-                                    <th style="padding: 12px;">Priority</th>
-                                    <th style="padding: 12px;">Status</th>
-                                    <th style="padding: 12px;">Assignee</th>
-                                    <th style="padding: 12px; text-align: right;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pdv-tasks-table-body">
-                                <!-- JS Injected Rows -->
-                            </tbody>
-                        </table>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <!-- =======================================================================
+         VIEW 2: DEVELOPER WORKSPACE & KANBAN
+         ======================================================================= -->
+    <div id="view-workspace" class="workspace-wrapper" style="display: none;">
+        <!-- Left Sidebar -->
+        <aside class="workspace-sidebar">
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 12px; padding-left: 8px;">
+                    WORKSPACE NAVIGATION
+                </div>
+                <div class="sidebar-nav-group">
+                    <button type="button" class="ws-nav-btn active" id="ws-nav-kanban">
+                        <span class="material-icons-round">view_kanban</span> Kanban Board
+                    </button>
+                    <button type="button" class="ws-nav-btn" id="ws-nav-projects">
+                        <span class="material-icons-round">folder</span> Projects
+                    </button>
+                    <button type="button" class="ws-nav-btn" id="ws-nav-teams">
+                        <span class="material-icons-round">groups</span> Teams & Roles
+                    </button>
+                    <button type="button" class="ws-nav-btn" id="ws-nav-inquiries">
+                        <span class="material-icons-round">inbox</span> Inquiries Triage
+                    </button>
+                </div>
+            </div>
+
+            <!-- Demo Authentication Profiles -->
+            <div>
+                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 12px; padding-left: 8px;">
+                    FAST DEMO PROFILES
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-admin" style="justify-content: flex-start; text-align: left;">
+                        <span class="material-icons-round" style="color: var(--accent-rose); font-size: 16px;">admin_panel_settings</span>
+                        <span>Tech Lead (Admin)</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-dev" style="justify-content: flex-start; text-align: left;">
+                        <span class="material-icons-round" style="color: var(--accent-cyan); font-size: 16px;">code</span>
+                        <span>Senior Dev (Member)</span>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Content Body -->
+        <main class="workspace-content">
+            <!-- Sub-view 1: Kanban Board -->
+            <section id="ws-sub-kanban">
+                <div class="kanban-header-bar">
+                    <div class="project-picker">
+                        <label for="select-kanban-project" style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">
+                            Active Project:
+                        </label>
+                        <select id="select-kanban-project" class="form-select" style="min-width: 280px; padding: 7px 12px;">
+                            <option value="">Loading projects...</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-kanban">
+                            <span class="material-icons-round">sync</span> Refresh
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-open-create-task">
+                            <span class="material-icons-round">add</span> Create Task
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4 Columns Kanban Layout -->
+                <div class="kanban-board" id="kanban-board-container">
+                    <!-- Column 1: TODO -->
+                    <div class="kanban-column" data-status="TODO" id="kanban-col-todo">
+                        <div class="column-header">
+                            <div class="column-title">
+                                <span class="material-icons-round" style="font-size: 18px; color: var(--text-muted);">radio_button_unchecked</span>
+                                To Do
+                            </div>
+                            <span class="task-count-badge" id="count-todo">0</span>
+                        </div>
+                        <div class="column-cards-container" id="cards-container-todo"></div>
+                    </div>
+
+                    <!-- Column 2: IN_PROGRESS -->
+                    <div class="kanban-column" data-status="IN_PROGRESS" id="kanban-col-in-progress">
+                        <div class="column-header">
+                            <div class="column-title">
+                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-cyan);">trending_up</span>
+                                In Progress
+                            </div>
+                            <span class="task-count-badge" id="count-in-progress">0</span>
+                        </div>
+                        <div class="column-cards-container" id="cards-container-in-progress"></div>
+                    </div>
+
+                    <!-- Column 3: IN_REVIEW -->
+                    <div class="kanban-column" data-status="IN_REVIEW" id="kanban-col-in-review">
+                        <div class="column-header">
+                            <div class="column-title">
+                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-amber);">rate_review</span>
+                                In Review
+                            </div>
+                            <span class="task-count-badge" id="count-in-review">0</span>
+                        </div>
+                        <div class="column-cards-container" id="cards-container-in-review"></div>
+                    </div>
+
+                    <!-- Column 4: DONE -->
+                    <div class="kanban-column" data-status="DONE" id="kanban-col-done">
+                        <div class="column-header">
+                            <div class="column-title">
+                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-emerald);">check_circle</span>
+                                Done
+                            </div>
+                            <span class="task-count-badge" id="count-done">0</span>
+                        </div>
+                        <div class="column-cards-container" id="cards-container-done"></div>
                     </div>
                 </div>
             </section>
 
-            <!-- Tasks View -->
-            <section id="tasks-view" class="view-section">
-                <div class="header-actions">
-                    <h2>Tasks Management</h2>
-                    <button type="button" class="btn btn-primary" id="btn-trigger-create-task" disabled><span class="material-icons-round">add</span> Create Task</button>
+            <!-- Sub-view 2: Projects Overview -->
+            <section id="ws-sub-projects" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Internal Projects Registry</h2>
+                        <p>All active development initiatives, architecture repositories, and teams.</p>
+                    </div>
                 </div>
-                <div class="card">
-                    <p style="color:var(--clr-text-muted); font-size:14px; margin-bottom:12px;">Active Project ID: <span id="active-project-id-display">None Selected</span></p>
-                    <button type="button" class="btn btn-secondary" id="btn-fetch-tasks" disabled><span class="material-icons-round">sync</span> Refresh Tasks</button>
-                    <div id="tasks-list" class="data-list"></div>
-                </div>
+                <div class="projects-grid" id="ws-projects-grid"></div>
             </section>
 
-            <!-- Technology View -->
-            <section id="tech-view" class="view-section">
-                <div class="header-actions">
-                    <h2>Technology Catalog</h2>
-                    <button type="button" class="btn btn-primary" onclick="openModal('modal-create-tech')"><span class="material-icons-round">add</span> Add Technology</button>
+            <!-- Sub-view 3: Teams & Roles -->
+            <section id="ws-sub-teams" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Teams & Guild Governance</h2>
+                        <p>Scoped RBAC permissions, member rosters, and team leadership.</p>
+                    </div>
                 </div>
-                <div class="card">
-                    <button type="button" class="btn btn-secondary" id="btn-fetch-tech"><span class="material-icons-round">sync</span> Refresh Catalog</button>
-                    <div id="tech-list" class="data-list"></div>
-                </div>
+                <div id="ws-teams-container"></div>
             </section>
 
+            <!-- Sub-view 4: Inquiries Triage -->
+            <section id="ws-sub-inquiries" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Client Consultations & Leads Triage</h2>
+                        <p>Manage incoming enterprise inquiries submitted via the showcase portal.</p>
+                    </div>
+                </div>
+                <div class="inquiry-card" style="max-width: 100%; padding: 20px;">
+                    <div id="inquiries-table-container">Loading inquiries...</div>
+                </div>
+            </section>
         </main>
     </div>
 
-    <!-- ==========================================
-         MODALS (HTML DIALOGS)
-         ========================================== -->
-    <div id="global-modal-overlay" class="modal-overlay">
-        <div class="modal-content" id="global-modal-content">
-            <!-- Dynamic Injection or Show/Hide logic via JS -->
+    <!-- =======================================================================
+         MODAL 1: TASK DETAILS & DISCUSSION THREAD
+         ======================================================================= -->
+    <div class="modal-overlay" id="modal-task-details">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="detail-priority-badge" class="priority-chip priority-high">HIGH</span>
+                    <span id="detail-status-badge" class="status-pill status-active">IN PROGRESS</span>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeModal('modal-task-details')">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+
+            <h3 id="detail-task-title" style="font-size: 22px; margin-bottom: 12px;">Task Title</h3>
+            <p id="detail-task-desc" style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; line-height: 1.6;">
+                Task description details...
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; padding: 12px; background: var(--bg-card); border-radius: var(--radius-md); font-size: 13px;">
+                <div><span style="color: var(--text-muted);">Assigned To:</span> <strong id="detail-assignee">Unassigned</strong></div>
+                <div><span style="color: var(--text-muted);">Due Date:</span> <strong id="detail-due-date">N/A</strong></div>
+            </div>
+
+            <!-- Comments & Discussion Thread -->
+            <div class="comments-container">
+                <h4 style="font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+                    <span class="material-icons-round" style="font-size: 18px; color: var(--primary-light);">forum</span>
+                    Activity & Discussion
+                </h4>
+
+                <!-- Existing comments -->
+                <div id="task-comments-list" style="max-height: 240px; overflow-y: auto; margin-bottom: 16px;">
+                    <!-- Injected comment bubbles -->
+                </div>
+
+                <!-- Add comment form -->
+                <form id="form-add-comment" style="display: flex; gap: 10px;">
+                    <input type="text" id="input-new-comment" class="form-input" placeholder="Post a technical update or comment..." required style="flex: 1;">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <span class="material-icons-round">send</span>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 
-    <!-- Template: Update Profile -->
-    <template id="modal-update-profile">
-        <div class="modal-header"><h3>Update Profile</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-update-profile">
-            <div class="modal-body">
-                <div class="form-group">
-                    <label>Name</label><input type="text" id="up-name">
-                </div>
-                <div class="form-group">
-                    <label>Job Title</label>
-                    <select id="up-job">
-                        <option value="">-- No Change --</option>
-                        <option value="backend_developer">Backend Developer</option>
-                        <option value="frontend_developer">Frontend Developer</option>
-                        <option value="flutter_developer">Flutter Developer</option>
-                        <option value="UI_UX_developer">UI/UX Developer</option>
-                        <option value="wep_developer">Web Developer (wep_developer)</option>
-                        <option value="softwere_developer">Software Developer (softwere_developer)</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Bio</label><textarea id="up-bio"></textarea>
-                </div>
+    <!-- =======================================================================
+         MODAL 2: CREATE TASK
+         ======================================================================= -->
+    <div class="modal-overlay" id="modal-create-task">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Create New Sprint Task</h3>
+                <button type="button" class="modal-close-btn" onclick="closeModal('modal-create-task')">
+                    <span class="material-icons-round">close</span>
+                </button>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-        </form>
-    </template>
 
-    <!-- Template: Change Password -->
-    <template id="modal-change-password">
-        <div class="modal-header"><h3>Change Password</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-change-password">
-            <div class="modal-body">
-                <div class="form-group"><label>Old Password</label><input type="password" id="cp-old" required></div>
-                <div class="form-group"><label>New Password</label><input type="password" id="cp-new" required></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Update</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Create Team -->
-    <template id="modal-create-team">
-        <div class="modal-header"><h3>Create Team</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-create-team">
-            <div class="modal-body">
-                <div class="form-group"><label>Team Name</label><input type="text" id="ct-name" required></div>
-                <div class="form-group"><label>Description</label><textarea id="ct-desc"></textarea></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Create Project -->
-    <template id="tpl-create-project">
-        <div class="modal-header"><h3>Create Project</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-create-project">
-            <div class="modal-body">
-                <input type="hidden" id="cproj-team-id">
-                <div class="form-group"><label>Title</label><input type="text" id="cproj-title" required></div>
-                <div class="form-group"><label>Short Description</label><textarea id="cproj-desc" required></textarea></div>
-                <div class="form-group"><label>Deadline (Optional)</label><input type="datetime-local" id="cproj-deadline"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Create Task -->
-    <template id="tpl-create-task">
-        <div class="modal-header"><h3>Create Task</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-create-task">
-            <div class="modal-body">
-                <input type="hidden" id="ctask-proj-id">
-                <div class="form-group"><label>Title</label><input type="text" id="ctask-title" required></div>
-                <div class="form-group"><label>Description</label><textarea id="ctask-desc" required></textarea></div>
+            <form id="form-create-task">
                 <div class="form-group">
-                    <label>Priority</label>
-                    <select id="ctask-priority">
-                        <option value="low">Low</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
-                    </select>
+                    <label for="create-task-title">Title *</label>
+                    <input type="text" id="create-task-title" class="form-input" placeholder="e.g., Implement Casbin Scope Resolver" required>
                 </div>
-                <div class="form-group"><label>Assign To (User UUID) - Optional</label><input type="text" id="ctask-assignee"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create</button>
-            </div>
-        </form>
-    </template>
-    
-    <!-- Template: Add Technology -->
-    <template id="modal-create-tech">
-        <div class="modal-header"><h3>Add Technology to Global Catalog</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-create-tech">
-            <div class="modal-body">
-                <div class="form-group"><label>Name</label><input type="text" id="ctech-name" required></div>
-                <div class="form-group"><label>Description</label><textarea id="ctech-desc"></textarea></div>
-                <div class="form-group"><label>Docs URL</label><input type="url" id="ctech-url"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create</button>
-            </div>
-        </form>
-    </template>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="create-task-priority">Priority</label>
+                        <select id="create-task-priority" class="form-select">
+                            <option value="MEDIUM" selected>MEDIUM</option>
+                            <option value="LOW">LOW</option>
+                            <option value="HIGH">HIGH</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="create-task-status">Initial Status</label>
+                        <select id="create-task-status" class="form-select">
+                            <option value="TODO" selected>To Do</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="IN_REVIEW">In Review</option>
+                            <option value="DONE">Done</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="create-task-desc">Description</label>
+                    <textarea id="create-task-desc" class="form-textarea" rows="3" placeholder="Provide context, acceptance criteria, or architectural notes..."></textarea>
+                </div>
+                <div style="text-align: right; margin-top: 16px;">
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                        <span class="material-icons-round">add_task</span> Create Task
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    <!-- Template: Add Team Member -->
-    <template id="tpl-add-member">
-        <div class="modal-header"><h3>Add Member to Team</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-add-member">
-            <div class="modal-body">
-                <input type="hidden" id="cmem-team-id">
-                <div class="form-group"><label>User ID (UUID)</label><input type="text" id="cmem-user-id" required></div>
-                <div class="form-group">
-                    <label>Role</label>
-                    <select id="cmem-role">
-                        <option value="viewer">Viewer</option>
-                        <option value="developer" selected>Developer</option>
-                        <option value="admin">Admin</option>
-                        <option value="super_admin">Super Admin</option>
-                    </select>
-                </div>
+    <!-- =======================================================================
+         MODAL 3: AUTHENTICATION
+         ======================================================================= -->
+    <div class="modal-overlay" id="modal-auth">
+        <div class="modal-box" style="max-width: 420px;">
+            <div class="modal-header">
+                <h3 id="auth-modal-title">Sign In to DevStation</h3>
+                <button type="button" class="modal-close-btn" onclick="closeModal('modal-auth')">
+                    <span class="material-icons-round">close</span>
+                </button>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Add</button>
-            </div>
-        </form>
-    </template>
 
-    <!-- Template: Update Member Role -->
-    <template id="tpl-update-member-role">
-        <div class="modal-header"><h3>Update Member Role</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-update-member-role">
-            <div class="modal-body">
-                <input type="hidden" id="upmem-team-id">
-                <input type="hidden" id="upmem-user-id">
+            <form id="form-auth-login">
                 <div class="form-group">
-                    <label>New Role</label>
-                    <select id="upmem-role">
-                        <option value="super_admin">Super Admin</option>
-                        <option value="admin">Admin</option>
-                        <option value="developer">Developer</option>
-                        <option value="viewer">Viewer</option>
-                    </select>
+                    <label for="auth-email">Email Address</label>
+                    <input type="email" id="auth-email" class="form-input" placeholder="alex@agency.io" required>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Role</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Direct Assign Task -->
-    <template id="tpl-assign-task-to-member">
-        <div class="modal-header"><h3>Assign Task to Member</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-assign-task">
-            <div class="modal-body">
-                <input type="hidden" id="dtask-assignee">
-                <p style="margin-bottom: 12px; font-size: 14px; color: var(--clr-text-muted);">
-                    Assigning to: <strong id="dtask-assignee-label" style="color:var(--clr-text-main);">...</strong>
-                </p>
                 <div class="form-group">
-                    <label>Select Project</label>
-                    <select id="dtask-project-id" required>
-                        <option value="">Loading projects...</option>
-                    </select>
+                    <label for="auth-password">Password</label>
+                    <input type="password" id="auth-password" class="form-input" placeholder="••••••••••••" required>
                 </div>
-                <div class="form-group"><label>Task Title</label><input type="text" id="dtask-title" required></div>
-                <div class="form-group"><label>Description</label><textarea id="dtask-desc" required></textarea></div>
-                <div class="form-group">
-                    <label>Priority</label>
-                    <select id="dtask-priority">
-                        <option value="low">Low</option>
-                        <option value="medium" selected>Medium</option>
-                        <option value="high">High</option>
-                        <option value="critical">Critical</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create & Assign</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Update Project -->
-    <template id="tpl-update-project">
-        <div class="modal-header"><h3>Edit Project</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-update-project">
-            <div class="modal-body">
-                <input type="hidden" id="upproj-id">
-                <div class="form-group"><label>Title</label><input type="text" id="upproj-title"></div>
-                <div class="form-group"><label>Short Description</label><input type="text" id="upproj-desc"></div>
-                <div class="form-group">
-                    <label>Status</label>
-                    <select id="upproj-status">
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="in_review">In Review</option>
-                        <option value="done">Done</option>
-                        <option value="active">Active</option>
-                        <option value="archived">Archived</option>
-                    </select>
-                </div>
-                <div class="form-group"><label>Deadline</label><input type="datetime-local" id="upproj-deadline"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-            </div>
-        </form>
-    </template>
-
-    <!-- Template: Update Task Status -->
-    <template id="tpl-update-task-status">
-        <div class="modal-header"><h3>Update Task Status</h3><button type="button" class="btn-close material-icons-round" onclick="closeModal()">close</button></div>
-        <form id="form-update-task-status">
-            <div class="modal-body">
-                <input type="hidden" id="uptask-id">
-                <div class="form-group">
-                    <label>New Status</label>
-                    <select id="uptask-status">
-                        <option value="todo">To Do</option>
-                        <option value="in_progress">In Progress</option>
-                        <option value="in_review">In Review</option>
-                        <option value="done">Done</option>
-                        <option value="active">Active</option>
-                        <option value="archived">Archived</option>
-                    </select>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Status</button>
-            </div>
-        </form>
-    </template>
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
+                    <span class="material-icons-round">login</span> Sign In
+                </button>
+            </form>
+        </div>
+    </div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
-    <!-- Scripts -->
-    <script src="./js/core/ui.js"></script>
+    <!-- Application Logic Scripts -->
     <script src="./js/core/api.js"></script>
-    <script src="./js/domains/auth.js"></script>
-    <script src="./js/domains/users.js"></script>
-    <script src="./js/domains/teams.js"></script>
-    <script src="./js/domains/team_members.js"></script>
-    <script src="./js/domains/projects.js"></script>
-    <script src="./js/domains/tasks.js"></script>
-    <script src="./js/domains/tech.js"></script>
+    <script src="./js/core/ui.js"></script>
     <script src="./js/app.js"></script>
 </body>
 </html>

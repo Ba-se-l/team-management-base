@@ -1,99 +1,78 @@
+"""Application settings and environment configuration loaded via Pydantic Settings."""
+
 from typing import Literal
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-
 class EnvSettings(BaseSettings):
-    """Application configuration loaded from enviroment variables and `.env` file
-
-    Attributes are loaded from the .env file at project root
-    """
+    """Platform configuration loaded from environment variables and `.env` file."""
 
     model_config = SettingsConfigDict(
-        env_file='.env',
-        env_file_encoding='utf-8',
-        extra='ignore'
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
-
+    # Server Configuration
     HOST: str = "127.0.0.1"
-    """The IP address or host interface to bind the Uvicorn ASGI server to."""
-
     PORT: int = 8000
-    """The port number on which the Uvicorn ASGI server listens for requests."""
-
     RELOAD: bool = False
-    """Boolean flag to enable automatic code reloading upon file modifications."""
+    ENVIRONMENT: Literal["dev", "test", "prod"] = "dev"
+    API_PREFIX: str = "/api/v1"
 
-
-    DATABASE_URL: str = "sqlite+aiosqlite:///./database_name.db" # للتطوير فقط استخدام النسخة اللمتزامنة من (.db)
-    """The async database connection URL"""
-
-    # AsyncEngineSettings
-    ECHO: bool = True
-    """Whether `SQLAlchemy` should log all SQL statements"""
-
-    ENVIRONMENT: str = 'dev'
-
-
-    API_PREFIX: str = '/api/v1'
-
-    # AsyncSessionSettings
+    # Database Configuration
+    DATABASE_URL: str = "sqlite+aiosqlite:///./platform.db"
+    ECHO: bool = False
     AUTO_FLUSH: bool = False
-    """Controls `SQLAlchemy` session autoflush behavior"""
-
     EXPIRE_ON_COMMIT: bool = False
-    """Whether to expire all instance after commit"""
+    POOL_SIZE: int = 20
+    MAX_OVERFLOW: int = 10
+    POOL_TIMEOUT: int = 30
+    POOL_PRE_PING: bool = True
 
-
-    # ———————————————— JWT Settings ————————————————
-    # JWT Authentacation
+    # Security & Tokens
     SECRET_KEY: str = "secret-key-in-production-time-in-this-place"
-    """Secret key used for signing `JWT` tokens"""
-
     REFRESH_SECRET_KEY: str = "refresh-secret-key-in-production-time-in-this-place"
-    """Separate secret key used for signing JWT refresh tokens."""
-
-    ALGORITHM: str = 'HS256'
-    """Algorithm used for `JWT` encoding"""
-
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    """Access token expiry duration in minutes"""
-
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-    """Refresh token expiry duration in days. Long-lived, revocable."""
+    REFRESH_COOKIE_NAME: str = "refresh_token"
+    REFRESH_COOKIE_SECURE: bool = False
 
-    TRIAL_DAYS: int = 3
-    # ————————————————————————————————————————————————————
+    # CORS & Networking
+    CORS_ORIGINS: list[str] = []
+    TRUST_PROXY_HEADERS: bool = True
+    TRUSTED_PROXIES: list[str] = ["127.0.0.1", "::1"]
+    TRUSTED_PROXY_COUNT: int = 1
 
-    @model_validator(mode='after')
-    def _validate_production_secrets(self) -> "EnvSettings":
+    # Rate Limiting (Requests per minute)
+    LOGIN_RATE_LIMIT: int = 5
+    INQUIRY_RATE_LIMIT: int = 3
 
-        if self.ENVIRONMENT != 'pro':
-            return self
+    @model_validator(mode="after")
+    def _validate_settings(self) -> "EnvSettings":
+        """Enforces production safety invariants and defaults."""
+        if self.ENVIRONMENT == "prod":
+            if self.REFRESH_COOKIE_SECURE is False:
+                self.REFRESH_COOKIE_SECURE = True
 
-        placeholders = {
-            'SECRET_KEY': "secret-key-in-production-time-in-this-place",
-            'REFRESH_SECRET_KEY': "refresh-secret-key-in-production-time-in-this-place"
-        }
-        for field_name, placeholder in placeholders.items():
-            value: str = getattr(self, field_name)
-            if value.startswith(placeholder):
-                raise ValueError(
-                    f"FATAL: {field_name} contans a placeholder value. "
-                    f"Set a real secret in `.env` before running in production mode."
-                )
+            placeholders = {
+                "SECRET_KEY": "secret-key-in-production-time-in-this-place",
+                "REFRESH_SECRET_KEY": "refresh-secret-key-in-production-time-in-this-place",
+            }
+            for field_name, placeholder in placeholders.items():
+                val: str = getattr(self, field_name)
+                if val.startswith(placeholder):
+                    raise ValueError(
+                        f"FATAL: {field_name} contains an insecure default placeholder. "
+                        "A cryptographically strong secret must be set in `.env` for production."
+                    )
 
-        if self.ECHO:
-            raise ValueError(
-                "FATAL: `ECHO` must be False in production to prevent SQL statement leaks."
-            )
+            if self.ECHO:
+                raise ValueError("FATAL: `ECHO` must be False in production to avoid leaking sensitive query data.")
 
         return self
-
-
-
 
 
 settings = EnvSettings()

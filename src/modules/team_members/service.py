@@ -1,208 +1,192 @@
-"""Team Members domain service layer.
-
-Contains business logic for managing team memberships, including
-adding members, removing members, updating roles, and listing team
-members. Enforces role-based access control (RBAC).
-"""
+"""Team member domain service orchestrating memberships, role updates, and orphan protection."""
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
 
-from src.database import UserRoles
-from src.modules.user import User, UserRepository, UserNotFoundException, UserInactiveException
+from src.database.enums import TeamRole
+from src.exc import BusinessRuleViolationException, NotFoundException
+from src.modules.team.repository import TeamRepository
+from src.modules.user.models import User
+from src.modules.user.repository import UserRepository
+from src.share.responses import PageResult
 from .models import TeamMember
-from .schemas import AddMemberRequest, UpdateMemberRoleRequest
 from .repository import TeamMemberRepository
-from .exceptions import TeamMemberNotFoundException, InsufficientRoleException
+from .schemas import AddMemberRequest, MemberResponse, UpdateMemberRoleRequest
+
+
+def _build_member_response(membership: TeamMember, user: User | None = None) -> MemberResponse:
+    """Builds a hydrated MemberResponse combining membership record and user profile."""
+    u = user or getattr(membership, "member", None)
+    return MemberResponse(
+        member_id=membership.member_id,
+        team_id=membership.team_id,
+        role=membership.role,
+        is_active=membership.is_active,
+        joined_at=membership.joined_at,
+        name=u.name if u else None,
+        username=u.username if u else None,
+        email=u.email if u else None,
+        avatar_url=u.avatar_url if u else None,
+        job_title=u.job_title if u else None,
+    )
 
 
 async def add_member(
-    team_id: ID,
+    team_id: int,
     schema: AddMemberRequest,
-    adder: User,
     session: AsyncSession,
-) -> TeamMember:
-    """Adds a new member to a team with a specific role.
-
-    Orchestration steps:
-        1. Verify adder has ADMIN+ role in the team.
-        2. Verify the target user exists and is active.
-        3. Verify the user is not already a member.
-        4. Create and persist the TeamMember record.
+) -> MemberResponse:
+    """Enrolls an existing active user into a team workspace.
 
     Args:
-        team_id: The UUID of the team.
-        schema: The validated request containing user_id and role.
-        adder: The authenticated user attempting to add the member.
-        session: The active database session.
+        team_id: Team integer ID.
+        schema: Request containing user_id and role.
+        session: Active asynchronous database session.
 
     Returns:
-        The newly created ``TeamMember`` ORM instance.
+        Hydrated MemberResponse.
 
     Raises:
-        InsufficientRoleException: If the adder lacks ADMIN role.
-        UserNotFoundException: If the target user does not exist.
-        UserInactiveException: If the target user is inactive.
-        ValueError: If the user is already a member (domain rule).
+        NotFoundException: If team or user does not exist.
+        BusinessRuleViolationException: If user is inactive or already a team member.
     """
-    member_repo = TeamMemberRepository(session=session)
+    team_repo = TeamRepository(session=session)
+    team = await team_repo.get_by_id(team_id)
+    if team is None:
+        raise NotFoundException(entity="Team", identifier=team_id)
+
     user_repo = UserRepository(session=session)
-
-    # Step 1: Verify adder's role
-    adder_role = await member_repo.get_member_role(member_id=adder.id, team_id=team_id)
-    if adder_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('SUPER_ADMIN')
-
-    # Step 2: Verify target user exists and is active
-    target_user = await user_repo.get_by_id(id=schema.user_id)
+    target_user = await user_repo.get_by_id(schema.user_id)
     if target_user is None:
-        raise UserNotFoundException(identifier=str(schema.user_id))
+        raise NotFoundException(entity="User", identifier=schema.user_id)
+
     if not target_user.is_active:
-        raise UserInactiveException(identifier=str(schema.user_id))
+        raise BusinessRuleViolationException(
+            message=f"User '{target_user.username}' is inactive and cannot be enrolled in a team.",
+            error_code="INACTIVE_USER_ENROLLMENT",
+        )
 
-    # Step 3: Verify user is not already a member
-    is_member = await member_repo.check_if_membership(
-        member_id=schema.user_id,
-        team_id=team_id,
-    )
-    if is_member:
-        raise ValueError(f"User {schema.user_id} is already a member of team {team_id}.")
-
-    # Step 4: Create membership
-    membership = TeamMember(
-        member_id=schema.user_id,
-        team_id=team_id,
-        role=schema.role,
-    )
-    await member_repo.create(orm_model=membership)
-
-    await session.flush() 
-
-    return membership
-
-
-async def remove_member(
-    team_id: ID,
-    user_id: ID,
-    remover: User,
-    session: AsyncSession,
-) -> TeamMember:
-    """Removes a member from a team.
-
-    Orchestration steps:
-        1. Verify remover has ADMIN+ role in the team.
-        2. Fetch the target membership.
-        3. Guard: Cannot remove self if SUPER_ADMIN (orphan protection).
-        4. Hard-delete the membership record.
-
-    Args:
-        team_id: The UUID of the team.
-        user_id: The UUID of the user to remove.
-        remover: The authenticated user attempting to remove the member.
-        session: The active database session.
-
-    Returns:
-        The deleted ``TeamMember`` ORM instance.
-
-    Raises:
-        InsufficientRoleException: If the remover lacks ADMIN role.
-        TeamMemberNotFoundException: If the target membership does not exist.
-        ValueError: If a SUPER_ADMIN tries to remove themselves.
-    """
     member_repo = TeamMemberRepository(session=session)
+    existing = await member_repo.get_membership(member_id=schema.user_id, team_id=team_id)
 
-    # Step 1: Verify remover's role
-    remover_role = await member_repo.get_member_role(member_id=remover.id, team_id=team_id)
-    if remover_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('SUPER_ADMIN')
+    if existing is not None:
+        if existing.is_active:
+            raise BusinessRuleViolationException(
+                message=f"User '{target_user.username}' is already an active member of this team.",
+                error_code="MEMBER_ALREADY_EXISTS",
+            )
+        # Reactivate previously removed membership
+        existing.is_active = True
+        existing.role = schema.role
+        await member_repo.update(existing, {"is_active": True, "role": schema.role})
+        return _build_member_response(existing, target_user)
 
-    # Step 2: Fetch target membership
-    membership = await member_repo.get_membership(member_id=user_id, team_id=team_id)
-    if membership is None:
-        raise TeamMemberNotFoundException(identifier=f"User {user_id} in Team {team_id}")
-
-    # Step 3: Guard orphan protection
-    if remover.id == user_id and membership.role == UserRoles.SUPER_ADMIN:
-        raise ValueError("SUPER_ADMIN cannot remove themselves. Transfer ownership first or delete the team.")
-
-    # Step 4: Delete membership
-    await member_repo.delete(orm_model=membership)
-
-    return membership
+    membership = TeamMember(
+        team_id=team_id,
+        member_id=schema.user_id,
+        role=schema.role,
+        is_active=True,
+    )
+    membership = await member_repo.create(membership)
+    await session.flush()
+    return _build_member_response(membership, target_user)
 
 
 async def update_member_role(
-    team_id: ID,
-    user_id: ID,
+    team_id: int,
+    user_id: int,
     schema: UpdateMemberRoleRequest,
-    updater: User,
     session: AsyncSession,
-) -> TeamMember:
-    """Updates a member's role within a team.
-
-    Orchestration steps:
-        1. Verify updater has SUPER_ADMIN role in the team.
-        2. Fetch the target membership.
-        3. Guard: Cannot demote self.
-        4. Update the role.
+) -> MemberResponse:
+    """Updates a team member's role with orphan administrator protection.
 
     Args:
-        team_id: The UUID of the team.
-        user_id: The UUID of the user whose role is being updated.
-        schema: The validated request containing the new role.
-        updater: The authenticated user attempting the update.
-        session: The active database session.
+        team_id: Target team integer ID.
+        user_id: Target user integer primary key.
+        schema: Validated new role.
+        session: Active asynchronous database session.
 
     Returns:
-        The updated ``TeamMember`` ORM instance.
+        Updated MemberResponse.
 
     Raises:
-        InsufficientRoleException: If the updater lacks SUPER_ADMIN role.
-        TeamMemberNotFoundException: If the target membership does not exist.
-        ValueError: If a SUPER_ADMIN tries to demote themselves.
+        NotFoundException: If membership record is not found.
+        BusinessRuleViolationException: If demoting the sole remaining administrator.
     """
     member_repo = TeamMemberRepository(session=session)
-
-    # Step 1: Verify updater's role
-    updater_role = await member_repo.get_member_role(member_id=updater.id, team_id=team_id)
-    if updater_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('SUPER_ADMIN')
-
-    # Step 2: Fetch target membership
     membership = await member_repo.get_membership(member_id=user_id, team_id=team_id)
     if membership is None:
-        raise TeamMemberNotFoundException(identifier=f"User {user_id} in Team {team_id}")
+        raise NotFoundException(entity="TeamMember", identifier=f"User {user_id} in Team {team_id}")
 
-    # Step 3: Guard self-demotion
-    if updater.id == user_id and schema.role != UserRoles.SUPER_ADMIN:
-        raise ValueError("SUPER_ADMIN cannot demote themselves. Transfer ownership first.")
+    # Guard: Prevent demoting the last remaining admin
+    if membership.role == TeamRole.ADMIN and schema.role != TeamRole.ADMIN:
+        admin_count = await member_repo.count_active_admins(team_id)
+        if admin_count <= 1:
+            raise BusinessRuleViolationException(
+                message="Cannot remove or demote the sole team administrator.",
+                error_code="LAST_ADMIN_CANNOT_BE_REMOVED",
+            )
 
-    # Step 4: Apply update
-    updated_membership = await member_repo.update(
-        orm_model=membership,
-        update_data={'role': schema.role},
-    )
+    membership = await member_repo.update(membership, {"role": schema.role})
+    user_repo = UserRepository(session=session)
+    user = await user_repo.get_by_id(user_id)
+    return _build_member_response(membership, user)
 
-    return updated_membership
+
+async def remove_member(
+    team_id: int,
+    user_id: int,
+    session: AsyncSession,
+) -> None:
+    """Removes a member from a team with sole administrator protection.
+
+    Args:
+        team_id: Target team integer ID.
+        user_id: Target user integer primary key.
+        session: Active asynchronous database session.
+
+    Raises:
+        NotFoundException: If membership does not exist.
+        BusinessRuleViolationException: If removing the sole remaining administrator.
+    """
+    member_repo = TeamMemberRepository(session=session)
+    membership = await member_repo.get_membership(member_id=user_id, team_id=team_id)
+    if membership is None:
+        raise NotFoundException(entity="TeamMember", identifier=f"User {user_id} in Team {team_id}")
+
+    if membership.role == TeamRole.ADMIN:
+        admin_count = await member_repo.count_active_admins(team_id)
+        if admin_count <= 1:
+            raise BusinessRuleViolationException(
+                message="Cannot remove the sole team leader.",
+                error_code="LAST_ADMIN_CANNOT_BE_REMOVED",
+            )
+
+    await member_repo.delete(membership)
 
 
 async def list_team_members(
-    team_id: ID,
+    team_id: int,
     session: AsyncSession,
-    skip: int = 0,
+    offset: int = 0,
     limit: int = 20,
-) -> list[TeamMember]:
-    """Lists all members of a specific team with pagination.
+) -> PageResult[MemberResponse]:
+    """Retrieves paginated members enrolled in the specified team workspace.
 
     Args:
-        team_id: The UUID of the team.
-        session: The active database session.
-        skip: Number of records to skip. Defaults to ``0``.
-        limit: Maximum number of records to return. Defaults to ``20``.
+        team_id: Team integer ID.
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
 
     Returns:
-        A list of ``TeamMember`` ORM instances.
+        PageResult of MemberResponse instances.
     """
     member_repo = TeamMemberRepository(session=session)
+    page = await member_repo.get_team_members(team_id=team_id, offset=offset, limit=limit)
 
-    return await member_repo.get_team_members(team_id=team_id, skip=skip, limit=limit)
+    return PageResult(
+        items=[_build_member_response(m) for m in page.items],
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
+    )

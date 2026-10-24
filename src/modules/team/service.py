@@ -1,238 +1,195 @@
-"""Team domain service layer.
-
-Contains all business logic for team management operations including
-creation, update, soft-deletion, and listing of user teams.
-Each function orchestrates calls to ``TeamRepository`` and
-``TeamMemberRepository``, enforcing role-based access control.
-"""
+"""Team domain service orchestrating team lifecycles, memberships, and metrics."""
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
 
-from src.database import UserRoles
-from src.modules.user import User
-from src.modules.team_members import TeamMemberRepository, InsufficientRoleException
+from src.database.enums import TeamRole
+from src.exc import AlreadyExistsException, NotFoundException
 from src.modules.team_members.models import TeamMember
+from src.modules.team_members.repository import TeamMemberRepository
+from src.modules.user.models import User
+from src.share.helpers import slugify
+from src.share.responses import PageResult
 from .models import Team
-from .schemas import CreateTeamRequest, UpdateTeamRequest
 from .repository import TeamRepository
-from .exceptions import TeamNotFoundException
-
-
-async def _get_team(team_id: ID, session: AsyncSession) -> Team:
-    """Internal helper: fetches a team by ID or raises.
-
-    Args:
-        team_id: The UUID of the team to fetch.
-        session: The active database session.
-
-    Returns:
-        The ``Team`` ORM instance.
-
-    Raises:
-        TeamNotFoundException: If no team with the given ID exists.
-    """
-    repo = TeamRepository(session=session)
-    team = await repo.get_by_id(id=team_id)
-
-    if team is None:
-        raise TeamNotFoundException(identifier=str(team_id))
-
-    return team
+from .schemas import CreateTeamRequest, TeamResponse, UpdateTeamRequest
 
 
 async def create_team(
     schema: CreateTeamRequest,
     current_user: User,
     session: AsyncSession,
-) -> Team:
-    """Creates a new team and assigns the creator as SUPER_ADMIN member.
-
-    Orchestration steps:
-        1. Build the ``Team`` ORM instance with the creator's ID.
-        2. Persist the team via ``TeamRepository.create``.
-        3. Build a ``TeamMember`` record with ``SUPER_ADMIN`` role.
-        4. Persist the membership via ``TeamMemberRepository.create``.
+) -> TeamResponse:
+    """Creates a team workspace, enforces slug uniqueness, and grants the creator ADMIN authority.
 
     Args:
-        schema: The validated team creation request.
-        current_user: The authenticated user creating the team.
-        session: The active database session.
+        schema: Validated team creation request.
+        current_user: Requester creating the team.
+        session: Active asynchronous database session.
 
     Returns:
-        The newly created ``Team`` ORM instance.
+        Populated TeamResponse with initial metrics.
+
+    Raises:
+        AlreadyExistsException: If a team with the resolved slug already exists.
     """
     team_repo = TeamRepository(session=session)
     member_repo = TeamMemberRepository(session=session)
 
-    # Step 1: Build the Team ORM model
+    target_slug = slugify(schema.slug if schema.slug else schema.name)
+
+    existing = await team_repo.get_by_slug(target_slug)
+    if existing is not None:
+        raise AlreadyExistsException(entity="Team", field="slug", value=target_slug)
+
     team = Team(
         name=schema.name,
+        slug=target_slug,
         description=schema.description,
         creator_id=current_user.id,
     )
-
-    # Step 2: Persist the team
-    team = await team_repo.create(orm_model=team)
-
-    await session.flush() # مشان نستخدم المعرّف الخاص بالفريق لانشاء صاحب الفريق او يلي عمل الفريق ك `TEAM_LEADER`
-
-    # Step 3: Build the creator's membership as ADMIN
-    membership = TeamMember(
-        member_id=current_user.id,
-        team_id=team.id,
-        role=UserRoles.SUPER_ADMIN,
-    )
-
-    # Step 4: Persist the membership
-    await member_repo.create(orm_model=membership)
-
+    team = await team_repo.create(team)
     await session.flush()
 
-    return team
+    # Automatically enroll creator as team administrator
+    initial_membership = TeamMember(
+        team_id=team.id,
+        member_id=current_user.id,
+        role=TeamRole.ADMIN,
+    )
+    await member_repo.create(initial_membership)
+    await session.flush()
+
+    resp = TeamResponse.model_validate(team)
+    resp.members_count = 1
+    resp.projects_count = 0
+    return resp
+
+
+async def get_team(
+    identifier: int | str,
+    session: AsyncSession,
+) -> TeamResponse:
+    """Retrieves a team workspace by ID or slug along with live member and project counts.
+
+    Args:
+        identifier: Team integer ID or slug string.
+        session: Active asynchronous database session.
+
+    Returns:
+        TeamResponse populated with counts.
+
+    Raises:
+        NotFoundException: If no matching team exists.
+    """
+    team_repo = TeamRepository(session=session)
+    team: Team | None = None
+
+    if isinstance(identifier, int) or (isinstance(identifier, str) and identifier.isdigit()):
+        team = await team_repo.get_by_id(int(identifier))
+
+    if team is None and isinstance(identifier, str):
+        team = await team_repo.get_by_slug(identifier)
+
+    if team is None:
+        raise NotFoundException(entity="Team", identifier=identifier)
+
+    members_count, projects_count = await team_repo.get_team_metrics(team.id)
+    resp = TeamResponse.model_validate(team)
+    resp.members_count = members_count
+    resp.projects_count = projects_count
+    return resp
 
 
 async def update_team(
-    team_id: ID,
+    team_id: int,
     schema: UpdateTeamRequest,
-    current_user: User,
     session: AsyncSession,
-) -> Team:
-    """Updates a team's details.
-
-    Only users with ``ADMIN`` or ``SUPER_ADMIN`` role in the team
-    are allowed to update it.
-
-    Orchestration steps:
-        1. Fetch the team by ID.
-        2. Verify the user has ``ADMIN+`` role in the team.
-        3. Apply the update via repository.
+) -> TeamResponse:
+    """Updates team properties and returns updated metrics.
 
     Args:
-        team_id: The UUID of the team to update.
-        schema: The validated update request with optional fields.
-        current_user: The authenticated user performing the update.
-        session: The active database session.
+        team_id: Target team integer ID.
+        schema: Validated fields to update.
+        session: Active asynchronous database session.
 
     Returns:
-        The updated ``Team`` ORM instance.
+        Updated TeamResponse.
 
     Raises:
-        TeamNotFoundException: If the team does not exist.
-        InsufficientRoleException: If the user lacks ``ADMIN`` role.
+        NotFoundException: If team does not exist.
     """
     team_repo = TeamRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
+    team = await team_repo.get_by_id(team_id)
+    if team is None:
+        raise NotFoundException(entity="Team", identifier=team_id)
 
-    # Step 1: Fetch the team
-    team = await _get_team(team_id=team_id, session=session)
+    update_data = schema.model_dump(exclude_unset=True)
+    if update_data:
+        team = await team_repo.update(team, update_data)
 
-    # Step 2: Verify the user has ADMIN+ role
-    member_role = await member_repo.get_member_role(
-        member_id=current_user.id,
-        team_id=team_id,
-    )
-    if member_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('SUPER_ADMIN')
-
-    # Step 3: Apply the update
-    updated_team = await team_repo.update(
-        orm_model=team,
-        update_data=schema.model_dump(exclude_unset=True),
-    )
-
-    return updated_team
+    members_count, projects_count = await team_repo.get_team_metrics(team.id)
+    resp = TeamResponse.model_validate(team)
+    resp.members_count = members_count
+    resp.projects_count = projects_count
+    return resp
 
 
-async def soft_delete_team(
-    team_id: ID,
-    current_user: User,
+async def delete_team(
+    team_id: int,
     session: AsyncSession,
-) -> Team:
-    """Soft-deletes a team by setting ``is_active`` to ``False``.
-
-    Only users with ``SUPER_ADMIN`` role in the team are allowed
-    to soft-delete it. The team record and all memberships remain
-    in the database for referential integrity.
+) -> None:
+    """Deletes a team workspace and cascades deletion to projects and members.
 
     Args:
-        team_id: The UUID of the team to deactivate.
-        current_user: The authenticated user performing the deletion.
-        session: The active database session.
-
-    Returns:
-        The soft-deleted ``Team`` ORM instance.
+        team_id: Target team integer ID.
+        session: Active asynchronous database session.
 
     Raises:
-        TeamNotFoundException: If the team does not exist.
-        InsufficientRoleException: If the user lacks ``SUPER_ADMIN`` role.
+        NotFoundException: If team is not found.
     """
     team_repo = TeamRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
+    team = await team_repo.get_by_id(team_id)
+    if team is None:
+        raise NotFoundException(entity="Team", identifier=team_id)
 
-    # Step 1: Fetch the team
-    team = await _get_team(team_id=team_id, session=session)
-
-    # Step 2: Verify the user has SUPER_ADMIN role
-    member_role = await member_repo.get_member_role(
-        member_id=current_user.id,
-        team_id=team_id,
-    )
-    if member_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('SUPER_ADMIN')
-
-    # Step 3: Deactivate via update
-    soft_deleted_team = await team_repo.update(
-        orm_model=team,
-        update_data={'is_active': False},
-    )
-
-    return soft_deleted_team
+    await team_repo.delete(team)
 
 
-async def list_user_teams(
-    user_id: ID,
+async def list_teams(
+    current_user: User,
     session: AsyncSession,
-    skip: int = 0,
+    offset: int = 0,
     limit: int = 20,
-) -> list[Team]:
-    """Lists all teams that a user is a member of.
-
-    Orchestration steps:
-        1. Fetch all ``TeamMember`` records for the user.
-        2. Extract the ``team_id`` from each membership.
-        3. Fetch the corresponding ``Team`` objects.
+) -> PageResult[TeamResponse]:
+    """Lists teams accessible to the current user (all for super admins, enrolled for developers).
 
     Args:
-        user_id: The UUID of the user whose teams to list.
-        session: The active database session.
-        skip: Number of memberships to skip. Defaults to ``0``.
-        limit: Maximum number of memberships to return. Defaults to ``20``.
+        current_user: Requester.
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
 
     Returns:
-        A list of ``Team`` ORM instances the user belongs to.
+        PageResult of TeamResponse instances.
     """
     team_repo = TeamRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
 
-    # Step 1: Get all memberships for this user
-    memberships = await member_repo.get_user_memberships(
-        member_id=user_id,
-        skip=skip,
-        limit=limit,
+    if current_user.is_super_admin:
+        page = await team_repo.get_active_teams(offset=offset, limit=limit)
+    else:
+        page = await team_repo.get_user_teams(user_id=current_user.id, offset=offset, limit=limit)
+
+    items_with_metrics: list[TeamResponse] = []
+    for team in page.items:
+        members_count, projects_count = await team_repo.get_team_metrics(team.id)
+        resp = TeamResponse.model_validate(team)
+        resp.members_count = members_count
+        resp.projects_count = projects_count
+        items_with_metrics.append(resp)
+
+    return PageResult(
+        items=items_with_metrics,
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
     )
-
-    # Step 2: Extract team IDs
-    team_ids = [m.team_id for m in memberships]
-
-    if not team_ids:
-        return []
-
-    # Step 3: Fetch teams by IDs
-    teams = []
-    for team_id in team_ids:
-        team = await team_repo.get_by_id(id=team_id)
-        if team is not None:
-            teams.append(team)
-
-    return teams
