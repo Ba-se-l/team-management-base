@@ -6,8 +6,20 @@
 
 const API_BASE = '/api/v1';
 
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(cb) {
+    refreshSubscribers.push(cb);
+}
+
+function onRefreshed(token) {
+    refreshSubscribers.forEach(cb => cb(token));
+    refreshSubscribers = [];
+}
+
 /**
- * Executes an HTTP request against the backend API.
+ * Executes an HTTP request against the backend API with automatic retry and silent token refresh.
  * 
  * @param {string} endpoint - Relative API path (e.g., '/showcase/stats')
  * @param {RequestInit} [options={}] - Fetch configuration options
@@ -30,6 +42,55 @@ async function apiCall(endpoint, options = {}) {
             ...options,
             headers
         });
+
+        // Intercept 401 Unauthorized for silent rotational refresh
+        const isAuthRoute = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh');
+        if (response.status === 401 && !options._retry && !isAuthRoute) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    subscribeTokenRefresh((newToken) => {
+                        apiCall(endpoint, { ...options, _retry: true })
+                            .then(resolve)
+                            .catch(reject);
+                    });
+                });
+            }
+
+            options._retry = true;
+            isRefreshing = true;
+
+            try {
+                const storedRefresh = localStorage.getItem('refresh_token');
+                const refreshPayload = storedRefresh ? JSON.stringify({ refresh_token: storedRefresh }) : undefined;
+                const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: refreshPayload,
+                    credentials: 'same-origin',
+                });
+
+                if (refreshRes.ok) {
+                    const refreshJson = await refreshRes.json();
+                    const tokenData = refreshJson.data || refreshJson;
+                    if (tokenData && tokenData.access_token) {
+                        localStorage.setItem('access_token', tokenData.access_token);
+                        if (tokenData.refresh_token) {
+                            localStorage.setItem('refresh_token', tokenData.refresh_token);
+                        }
+                        isRefreshing = false;
+                        onRefreshed(tokenData.access_token);
+                        return await apiCall(endpoint, options);
+                    }
+                }
+            } catch (refreshErr) {
+                console.warn('Silent token refresh failed:', refreshErr);
+            }
+
+            isRefreshing = false;
+            refreshSubscribers = [];
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+        }
 
         const json = await response.json().catch(() => null);
 
@@ -132,15 +193,23 @@ async function apiGetShowcaseTeam() {
 }
 
 async function apiSubmitInquiry(inquiryData) {
-    return await apiCall('/inquiries', {
+    return await apiCall('/public/inquiries', {
         method: 'POST',
         body: JSON.stringify(inquiryData)
     });
 }
 
 // -----------------------------------------------------------------------------
-// Workspace Endpoints: Projects, Teams, Tasks, Comments
+// Workspace Endpoints: Projects, Teams, Tasks, Comments, Developer Dashboard
 // -----------------------------------------------------------------------------
+async function apiGetMyTasks() {
+    const res = await apiCall('/tasks/my?limit=100');
+    return res.items || res;
+}
+
+async function apiGetDeveloperDashboard() {
+    return await apiCall('/users/me/dashboard');
+}
 async function apiGetProjects() {
     const res = await apiCall('/projects?limit=100');
     return res.items || res;

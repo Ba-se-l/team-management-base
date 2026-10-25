@@ -95,3 +95,19 @@ function getInitials(name) {
         .join('')
         .toUpperCase();
 }
+
+/**
+ * Escapes unsafe HTML characters to prevent Cross-Site Scripting (XSS).
+ * 
+ * @param {string|null|undefined} str - Raw string possibly containing user input
+ * @returns {string} Sanitized safe string
+ */
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}

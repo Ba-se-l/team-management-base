@@ -56,18 +56,26 @@ async def _resolve_team_id_from_request(
     from src.modules.task.models import Task, TaskComment
     from src.modules.team.models import Team
 
+    # Check cached team context first
+    if hasattr(request.state, "team_id") and request.state.team_id is not None:
+        return int(request.state.team_id)
+
     path_params = request.path_params
 
     # 1. Direct team identifier in path (integer ID or slug)
     if "team_id" in path_params:
         val = str(path_params["team_id"])
         if val.isdigit():
-            return int(val)
+            tid = int(val)
+            request.state.team_id = tid
+            return tid
         stmt = select(Team.id).where(Team.slug == val)
         result = await session.scalar(stmt)
         if result is None:
             raise NotFoundException(entity="Team", identifier=val)
-        return int(result)
+        tid = int(result)
+        request.state.team_id = tid
+        return tid
 
     if "team_slug" in path_params:
         slug = str(path_params["team_slug"])
@@ -75,27 +83,33 @@ async def _resolve_team_id_from_request(
         result = await session.scalar(stmt)
         if result is None:
             raise NotFoundException(entity="Team", identifier=slug)
-        return int(result)
+        tid = int(result)
+        request.state.team_id = tid
+        return tid
 
     # 2. Indirect via project in path (integer ID or slug)
     if "project_id" in path_params:
         val = str(path_params["project_id"])
         if val.isdigit():
-            stmt = select(Project.team_id).where(Project.id == int(val))
+            stmt = select(Project).where(Project.id == int(val))
         else:
-            stmt = select(Project.team_id).where(Project.slug == val)
-        team_id = await session.scalar(stmt)
-        if team_id is None:
+            stmt = select(Project).where(Project.slug == val)
+        project = await session.scalar(stmt)
+        if project is None:
             raise NotFoundException(entity="Project", identifier=val)
-        return int(team_id)
+        request.state.target_project = project
+        request.state.team_id = project.team_id
+        return int(project.team_id)
 
     if "project_slug" in path_params:
         slug = str(path_params["project_slug"])
-        stmt = select(Project.team_id).where(Project.slug == slug)
-        team_id = await session.scalar(stmt)
-        if team_id is None:
+        stmt = select(Project).where(Project.slug == slug)
+        project = await session.scalar(stmt)
+        if project is None:
             raise NotFoundException(entity="Project", identifier=slug)
-        return int(team_id)
+        request.state.target_project = project
+        request.state.team_id = project.team_id
+        return int(project.team_id)
 
     # 3. Indirect via task in path
     if "task_id" in path_params:
@@ -104,13 +118,16 @@ async def _resolve_team_id_from_request(
         except (ValueError, TypeError):
             raise ForbiddenException("Invalid task identifier format.", error_code="INVALID_TASK_ID")
         stmt = (
-            select(Project.team_id)
-            .join(Task, Task.project_id == Project.id)
+            select(Task, Project.team_id)
+            .join(Project, Task.project_id == Project.id)
             .where(Task.id == task_id)
         )
-        team_id = await session.scalar(stmt)
-        if team_id is None:
+        row = (await session.execute(stmt)).first()
+        if row is None:
             raise NotFoundException(entity="Task", identifier=task_id)
+        task_obj, team_id = row
+        request.state.target_task = task_obj
+        request.state.team_id = int(team_id)
         return int(team_id)
 
     # 4. Indirect via comment in path
@@ -128,6 +145,7 @@ async def _resolve_team_id_from_request(
         team_id = await session.scalar(stmt)
         if team_id is None:
             raise NotFoundException(entity="TaskComment", identifier=cid)
+        request.state.team_id = int(team_id)
         return int(team_id)
 
     raise ForbiddenException(

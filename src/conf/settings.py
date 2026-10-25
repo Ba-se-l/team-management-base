@@ -1,7 +1,8 @@
 """Application settings and environment configuration loaded via Pydantic Settings."""
 
+import secrets
 from typing import Literal
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,13 +33,15 @@ class EnvSettings(BaseSettings):
     POOL_PRE_PING: bool = True
 
     # Security & Tokens
-    SECRET_KEY: str = "secret-key-in-production-time-in-this-place"
-    REFRESH_SECRET_KEY: str = "refresh-secret-key-in-production-time-in-this-place"
+    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    REFRESH_SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
     REFRESH_COOKIE_NAME: str = "refresh_token"
     REFRESH_COOKIE_SECURE: bool = False
+    ALLOW_PUBLIC_REGISTRATION: bool = False
+    PUBLIC_CACHE_MAX_AGE_SECONDS: int = 60
 
     # CORS & Networking
     CORS_ORIGINS: list[str] = []
@@ -52,10 +55,9 @@ class EnvSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_settings(self) -> "EnvSettings":
-        """Enforces production safety invariants and defaults."""
+        """Enforces production safety invariants and environment defaults."""
         if self.ENVIRONMENT == "prod":
-            if self.REFRESH_COOKIE_SECURE is False:
-                self.REFRESH_COOKIE_SECURE = True
+            self.REFRESH_COOKIE_SECURE = True
 
             placeholders = {
                 "SECRET_KEY": "secret-key-in-production-time-in-this-place",
@@ -63,9 +65,9 @@ class EnvSettings(BaseSettings):
             }
             for field_name, placeholder in placeholders.items():
                 val: str = getattr(self, field_name)
-                if val.startswith(placeholder):
+                if not val or val.startswith(placeholder):
                     raise ValueError(
-                        f"FATAL: {field_name} contains an insecure default placeholder. "
+                        f"FATAL: {field_name} contains an insecure default placeholder or is empty. "
                         "A cryptographically strong secret must be set in `.env` for production."
                     )
 

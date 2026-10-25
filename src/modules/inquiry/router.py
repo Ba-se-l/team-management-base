@@ -8,6 +8,8 @@ from src.conf import settings
 from src.database.enums import InquiryServiceType, InquiryStatus
 from src.database.session import get_session
 from src.security.guards import require_super_admin
+from src.share.helpers import resolve_client_ip
+from src.share.rate_limit import RateLimiter
 from src.share.responses import PageResult
 from . import service
 from .schemas import CreateInquiryRequest, InquiryResponse, UpdateInquiryStatusRequest
@@ -15,12 +17,15 @@ from .schemas import CreateInquiryRequest, InquiryResponse, UpdateInquiryStatusR
 public_router = APIRouter(prefix=f"{settings.API_PREFIX}/public/inquiries", tags=["Public Inquiries"])
 admin_router = APIRouter(prefix=f"{settings.API_PREFIX}/inquiries", tags=["Inquiries"])
 
+inquiry_rate_limiter = RateLimiter(requests_limit=settings.INQUIRY_RATE_LIMIT, window_seconds=60)
+
 
 @public_router.post(
     "",
     response_model=InquiryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Submit client inquiry or collaboration proposal",
+    dependencies=[Depends(inquiry_rate_limiter)],
 )
 async def submit_public_inquiry(
     request: Request,
@@ -28,7 +33,7 @@ async def submit_public_inquiry(
     session: AsyncSession = Depends(get_session),
 ) -> InquiryResponse:
     """Receives client inquiries and developer requests with honeypot bot defense."""
-    client_ip = request.client.host if request.client else None
+    client_ip = resolve_client_ip(request)
     return await service.submit_inquiry(
         schema=payload,
         ip_address=client_ip,

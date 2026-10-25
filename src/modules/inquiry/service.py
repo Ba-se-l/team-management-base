@@ -1,14 +1,17 @@
-"""Inquiry service orchestrating proposal submissions, honeypot defense, and admin triage."""
-
+import logging
+import random
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.enums import InquiryServiceType, InquiryStatus
 from src.exc import NotFoundException
+from src.share import AuditEvent, event_bus
 from src.share.responses import PageResult
 from .models import ServiceInquiry
 from .repository import InquiryRepository
 from .schemas import CreateInquiryRequest, InquiryResponse, UpdateInquiryStatusRequest
+
+logger = logging.getLogger(__name__)
 
 
 async def submit_inquiry(
@@ -28,9 +31,15 @@ async def submit_inquiry(
     """
     # Honeypot defense: If hidden bot field is filled, silently return fake success without persisting
     if schema.honeypot:
+        logger.warning(
+            "Honeypot trap triggered from IP: %s (trapped bot input: %s)",
+            ip_address,
+            schema.honeypot[:50],
+        )
+        fake_id = random.randint(10000, 99999)
         now = datetime.now(timezone.utc)
         return InquiryResponse(
-            id=0,
+            id=fake_id,
             client_name=schema.client_name,
             client_email=str(schema.client_email),
             company_name=schema.company_name,
@@ -55,6 +64,23 @@ async def submit_inquiry(
     )
     inquiry = await repo.create(inquiry)
     await session.flush()
+
+    await event_bus.publish(
+        AuditEvent(
+            action="INQUIRY_SUBMITTED",
+            entity_type="Inquiry",
+            entity_id=str(inquiry.id),
+            user_id=None,
+            changes_payload={
+                "client_name": inquiry.client_name,
+                "client_email": inquiry.client_email,
+                "service_type": inquiry.service_type.value,
+            },
+            ip_address=ip_address,
+        ),
+        session=session,
+    )
+
     return InquiryResponse.model_validate(inquiry)
 
 

@@ -82,10 +82,17 @@ async def list_team_projects(
 async def list_all_workspace_projects(
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> PageResult[ProjectResponse]:
-    """Retrieves all active projects across the workspace."""
-    return await service.list_all_projects(session=session, offset=offset, limit=limit)
+    """Retrieves all active projects accessible to the authenticated user."""
+    return await service.list_accessible_projects(
+        user_id=current_user.id,
+        is_super_admin=current_user.is_super_admin,
+        session=session,
+        offset=offset,
+        limit=limit,
+    )
 
 
 @top_level_router.get(

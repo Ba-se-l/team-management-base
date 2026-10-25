@@ -5,8 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.conf import settings
 from src.database.session import get_session
-from src.exc import InvalidCredentialsException
+from src.exc import ForbiddenException, InvalidCredentialsException
 from src.modules.user.models import User
+from src.share.rate_limit import RateLimiter
 from . import service
 from .dependencies import get_current_user
 from .schemas import (
@@ -18,6 +19,22 @@ from .schemas import (
 
 router = APIRouter(prefix=f"{settings.API_PREFIX}/auth", tags=["Authentication"])
 
+login_rate_limiter = RateLimiter(requests_limit=settings.LOGIN_RATE_LIMIT, window_seconds=60)
+
+
+@router.post(
+    "/register",
+    status_code=status.HTTP_403_FORBIDDEN,
+    summary="Public registration (Disabled)",
+)
+async def register() -> None:
+    """Enforces closed platform policy by blocking open user registrations."""
+    if not settings.ALLOW_PUBLIC_REGISTRATION:
+        raise ForbiddenException(
+            "Public self-registration is disabled. Accounts must be provisioned by a platform administrator.",
+            error_code="REGISTRATION_DISABLED",
+        )
+
 
 @router.post(
     "/login",
@@ -25,6 +42,7 @@ router = APIRouter(prefix=f"{settings.API_PREFIX}/auth", tags=["Authentication"]
     status_code=status.HTTP_200_OK,
     summary="Login and receive session token",
     description="Authenticates credentials and establishes session via HttpOnly cookie and JWT access token.",
+    dependencies=[Depends(login_rate_limiter)],
 )
 async def login(
     request_data: LoginRequest,

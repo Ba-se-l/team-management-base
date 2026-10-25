@@ -10,6 +10,8 @@ from .helpers import resolve_client_ip
 class RateLimiter:
     """Sliding-window rate limiter tracking requests by client IP and path."""
 
+    _instances: list["RateLimiter"] = []
+
     def __init__(self, requests_limit: int, window_seconds: int = 60) -> None:
         """Initializes the rate limiter.
 
@@ -20,6 +22,17 @@ class RateLimiter:
         self.requests_limit = requests_limit
         self.window_seconds = window_seconds
         self._history: dict[str, list[float]] = defaultdict(list)
+        RateLimiter._instances.append(self)
+
+    def reset(self) -> None:
+        """Clears the request history."""
+        self._history.clear()
+
+    @classmethod
+    def reset_all(cls) -> None:
+        """Clears request history for all instantiated rate limiters."""
+        for instance in cls._instances:
+            instance.reset()
 
     async def __call__(self, request: Request) -> None:
         """Evaluates incoming request and raises HTTP 429 if threshold is exceeded."""

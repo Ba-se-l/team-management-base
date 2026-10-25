@@ -85,6 +85,111 @@ class TaskRepository(BaseRepository[Task]):
         max_pos = await self.session.scalar(stmt)
         return float(max_pos + 1000.0) if max_pos is not None else 1000.0
 
+    async def shift_positions_between(
+        self,
+        project_id: int,
+        status: TaskStatus,
+        start_pos: float,
+        end_pos: float,
+        delta: float,
+    ) -> None:
+        """Shifts positions of tasks in a specific range for atomic Kanban reordering.
+
+        Args:
+            project_id: Project integer ID.
+            status: Task status column.
+            start_pos: Lower/starting bound position.
+            end_pos: Upper/ending bound position.
+            delta: Shift amount (e.g. +1000.0 or -1000.0).
+        """
+        from sqlalchemy import update
+
+        low = min(start_pos, end_pos)
+        high = max(start_pos, end_pos)
+        stmt = (
+            update(Task)
+            .where(
+                Task.project_id == project_id,
+                Task.status == status,
+                Task.is_active.is_(True),
+                Task.position >= low,
+                Task.position <= high,
+            )
+            .values(position=Task.position + delta)
+        )
+        await self.session.execute(stmt)
+
+    async def shift_positions_after(
+        self,
+        project_id: int,
+        status: TaskStatus,
+        from_pos: float,
+        delta: float,
+    ) -> None:
+        """Shifts positions of all tasks appearing at or after from_pos.
+
+        Args:
+            project_id: Project integer ID.
+            status: Task status column.
+            from_pos: Starting position threshold.
+            delta: Shift amount.
+        """
+        from sqlalchemy import update
+
+        stmt = (
+            update(Task)
+            .where(
+                Task.project_id == project_id,
+                Task.status == status,
+                Task.is_active.is_(True),
+                Task.position >= from_pos,
+            )
+            .values(position=Task.position + delta)
+        )
+        await self.session.execute(stmt)
+
+    async def get_user_assigned_tasks(
+        self,
+        user_id: int,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> PageResult[Task]:
+        """Retrieves active tasks assigned to the user within their active team memberships.
+
+        Args:
+            user_id: Assignee user integer ID.
+            offset: Record offset.
+            limit: Limit per page.
+
+        Returns:
+            PageResult of Task instances.
+        """
+        from src.modules.project.models import Project
+        from src.modules.team_members.models import TeamMember
+
+        stmt = (
+            select(Task)
+            .options(
+                selectinload(Task.created_by),
+                selectinload(Task.assignee_to),
+                selectinload(Task.comments).selectinload(TaskComment.author),
+            )
+            .join(Project, Project.id == Task.project_id)
+            .join(
+                TeamMember,
+                (TeamMember.team_id == Project.team_id)
+                & (TeamMember.member_id == user_id)
+                & (TeamMember.is_active.is_(True)),
+            )
+            .where(
+                Task.assignee_to_id == user_id,
+                Task.is_active.is_(True),
+                Project.is_active.is_(True),
+            )
+            .order_by(Task.deadline.asc().nulls_last(), Task.priority.desc(), Task.id.desc())
+        )
+        return await self.paginate(stmt, offset=offset, limit=limit)
+
     async def paginate_project_tasks(
         self,
         project_id: int,

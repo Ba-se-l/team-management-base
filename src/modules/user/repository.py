@@ -6,7 +6,6 @@ email lookups and active-user filtering.
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from uuid import UUID as ID
 
 from src.database import BaseRepository
 from .models import User
@@ -28,11 +27,11 @@ class UserRepository(BaseRepository[User]):
         """
         super().__init__(model=User, session=session)
 
-    async def get_by_id_or_raise(self, id: ID) -> User:
+    async def get_by_id_or_raise(self, id: int) -> User:
         """Fetches a user by primary key or raises if not found.
 
         Args:
-            id: The UUID of the user to fetch.
+            id: The integer ID of the user to fetch.
 
         Returns:
             The ``User`` ORM instance.

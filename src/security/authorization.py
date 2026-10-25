@@ -1,5 +1,4 @@
-"""Casbin RBAC authorization engine and policy enforcement service."""
-
+import asyncio
 from pathlib import Path
 import casbin
 from casbin_async_sqlalchemy_adapter import Adapter
@@ -11,20 +10,31 @@ from src.security.casbin_rule import CasbinRule
 _MODEL_PATH = Path(__file__).parent / "rbac_model.conf"
 
 _enforcer: casbin.AsyncEnforcer | None = None
+_enforcer_lock = asyncio.Lock()
+
+
+async def reset_casbin_enforcer() -> None:
+    """Resets the singleton enforcer for test teardown and dynamic policy reload."""
+    global _enforcer
+    async with _enforcer_lock:
+        _enforcer = None
 
 
 async def get_casbin_enforcer() -> casbin.AsyncEnforcer:
-    """Provides a singleton async Casbin enforcer wired to the database adapter.
+    """Provides a thread-safe singleton async Casbin enforcer wired to the database adapter.
 
     Returns:
         Configured and synchronized AsyncEnforcer instance.
     """
     global _enforcer
     if _enforcer is None:
-        adapter = Adapter(async_engine, CasbinRule)
-        _enforcer = casbin.AsyncEnforcer(str(_MODEL_PATH), adapter)
-        await _enforcer.load_policy()
-        await init_default_casbin_policies(_enforcer)
+        async with _enforcer_lock:
+            if _enforcer is None:
+                adapter = Adapter(async_engine, CasbinRule)
+                enf = casbin.AsyncEnforcer(str(_MODEL_PATH), adapter)
+                await enf.load_policy()
+                await init_default_casbin_policies(enf)
+                _enforcer = enf
     return _enforcer
 
 

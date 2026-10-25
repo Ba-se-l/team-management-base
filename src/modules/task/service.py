@@ -4,9 +4,10 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.enums import TaskStatus, TeamRole
-from src.exc import ForbiddenException, NotFoundException
+from src.exc import BusinessRuleViolationException, ForbiddenException, NotFoundException
 from src.modules.task.models import Task, TaskComment
 from src.modules.user.models import User
+from src.share import AuditEvent, event_bus
 from src.share.responses import PageResult
 from .repository import TaskRepository
 from .schemas import (
@@ -68,13 +69,99 @@ def _build_task_response(task: Task) -> TaskResponse:
     )
 
 
+async def _validate_assignee_in_team(
+    team_id: int,
+    assignee_id: int | None,
+    session: AsyncSession,
+) -> None:
+    """Verifies that the target assignee exists and belongs to the owning team.
+
+    Args:
+        team_id: Owning team integer ID.
+        assignee_id: Optional user integer ID to assign.
+        session: Active asynchronous database session.
+
+    Raises:
+        NotFoundException: If user does not exist.
+        BusinessRuleViolationException: If user is not an active member of the team.
+    """
+    if assignee_id is None:
+        return
+
+    from src.modules.user.repository import UserRepository
+    from src.modules.team_members.repository import TeamMemberRepository
+
+    user_repo = UserRepository(session=session)
+    assignee = await user_repo.get_by_id(assignee_id)
+    if assignee is None:
+        raise NotFoundException(entity="User", identifier=assignee_id)
+
+    tm_repo = TeamMemberRepository(session=session)
+    membership = await tm_repo.get_membership(member_id=assignee_id, team_id=team_id)
+    if membership is None or not membership.is_active:
+        raise BusinessRuleViolationException(
+            f"Cannot assign task to user {assignee_id} who is not an active member of team {team_id}.",
+            error_code="ASSIGNEE_NOT_IN_TEAM",
+        )
+
+
+async def _validate_task_ownership(
+    task: Task,
+    current_user: User,
+    team_id: int,
+    session: AsyncSession,
+) -> None:
+    """Enforces ABAC ownership rule: Developers can only modify/move their own tasks.
+
+    Super administrators and team leaders (ADMIN role) have unrestricted access.
+    Developers (DEVELOPER role) can only modify or transition tasks assigned to them,
+    tasks they established, or unassigned tasks.
+
+    Args:
+        task: Target Task entity.
+        current_user: Authenticated caller.
+        team_id: Owning team integer ID.
+        session: Active asynchronous database session.
+
+    Raises:
+        ForbiddenException: If developer lacks ownership of the task.
+    """
+    if current_user.is_super_admin:
+        return
+
+    from src.database.enums import TeamRole
+    from src.modules.team_members.repository import TeamMemberRepository
+
+    tm_repo = TeamMemberRepository(session=session)
+    membership = await tm_repo.get_membership(member_id=current_user.id, team_id=team_id)
+    if membership is None or not membership.is_active:
+        raise ForbiddenException(
+            "You are not an active member of this project's team.",
+            error_code="NOT_A_TEAM_MEMBER",
+        )
+
+    if membership.role == TeamRole.ADMIN:
+        return
+
+    is_owner = (
+        task.assignee_to_id == current_user.id
+        or task.creator_id == current_user.id
+        or task.assignee_to_id is None
+    )
+    if not is_owner:
+        raise ForbiddenException(
+            "You can only modify or transition tasks assigned to you.",
+            error_code="TASK_OWNERSHIP_REQUIRED",
+        )
+
+
 async def create_task(
     project_id: int,
     schema: CreateTaskRequest,
     creator: User,
     session: AsyncSession,
 ) -> TaskResponse:
-    """Creates a task within a project, automatically placing it at the end of the column.
+    """Creates a task within a project, validating assignee team membership.
 
     Args:
         project_id: Project integer ID.
@@ -87,14 +174,22 @@ async def create_task(
 
     Raises:
         NotFoundException: If project or assignee does not exist.
+        BusinessRuleViolationException: If assignee does not belong to project team.
     """
     from src.modules.project.repository import ProjectRepository
-    from src.modules.user.repository import UserRepository
 
     project_repo = ProjectRepository(session=session)
     project = await project_repo.get_by_id(project_id)
     if project is None:
         raise NotFoundException(entity="Project", identifier=project_id)
+
+    # Validate assignee belongs to the project's owning team
+    if schema.assignee_to_id is not None:
+        await _validate_assignee_in_team(
+            team_id=project.team_id,
+            assignee_id=schema.assignee_to_id,
+            session=session,
+        )
 
     task_repo = TaskRepository(session=session)
 
@@ -103,12 +198,6 @@ async def create_task(
         pos = schema.position
     else:
         pos = await task_repo.get_next_position(project_id=project_id, status=schema.status)
-
-    if schema.assignee_to_id is not None:
-        user_repo = UserRepository(session=session)
-        assignee = await user_repo.get_by_id(schema.assignee_to_id)
-        if assignee is None:
-            raise NotFoundException(entity="User", identifier=schema.assignee_to_id)
 
     task = Task(
         title=schema.title,
@@ -125,6 +214,18 @@ async def create_task(
     await session.flush()
 
     hydrated = await task_repo.get_task_with_details(task.id)
+
+    await event_bus.publish(
+        AuditEvent(
+            action="TASK_CREATED",
+            entity_type="Task",
+            entity_id=str(task.id),
+            user_id=creator.id,
+            changes_payload={"title": task.title, "status": task.status.value, "project_id": project_id},
+        ),
+        session=session,
+    )
+
     return _build_task_response(hydrated or task)
 
 
@@ -156,41 +257,115 @@ async def move_task(
     task_id: int,
     schema: MoveTaskRequest,
     session: AsyncSession,
+    current_user: User | None = None,
 ) -> TaskResponse:
-    """Updates a task's status and relative column position for Kanban drag-and-drop operations.
+    """Updates a task's status and relative column position with atomic shifting and ABAC validation.
 
     Args:
         task_id: Target task integer ID.
         schema: Target status column and new numeric position.
         session: Active asynchronous database session.
+        current_user: Optional authenticated user for ownership enforcement.
 
     Returns:
         Updated TaskResponse with adjusted completed_at timestamp.
 
     Raises:
-        NotFoundException: If task is not found.
+        NotFoundException: If task or project is not found.
+        ForbiddenException: If developer attempts to move a task they do not own.
     """
+    from src.modules.project.repository import ProjectRepository
+
     task_repo = TaskRepository(session=session)
     task = await task_repo.get_by_id(task_id)
     if task is None:
         raise NotFoundException(entity="Task", identifier=task_id)
 
+    project_repo = ProjectRepository(session=session)
+    project = await project_repo.get_by_id(task.project_id)
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=task.project_id)
+
+    # Enforce ABAC ownership if user context is provided
+    if current_user is not None:
+        await _validate_task_ownership(
+            task=task,
+            current_user=current_user,
+            team_id=project.team_id,
+            session=session,
+        )
+
+    old_status = task.status
+    old_pos = task.position
+    new_status = schema.status
+    new_pos = schema.position
+
+    # Atomic position shifting to guarantee ordering integrity
+    if old_status == new_status:
+        if new_pos > old_pos:
+            await task_repo.shift_positions_between(
+                project_id=task.project_id,
+                status=old_status,
+                start_pos=old_pos + 0.001,
+                end_pos=new_pos,
+                delta=-1000.0,
+            )
+        elif new_pos < old_pos:
+            await task_repo.shift_positions_between(
+                project_id=task.project_id,
+                status=old_status,
+                start_pos=new_pos,
+                end_pos=old_pos - 0.001,
+                delta=1000.0,
+            )
+    else:
+        # Relocating to a different status column
+        await task_repo.shift_positions_after(
+            project_id=task.project_id,
+            status=old_status,
+            from_pos=old_pos + 0.001,
+            delta=-1000.0,
+        )
+        await task_repo.shift_positions_after(
+            project_id=task.project_id,
+            status=new_status,
+            from_pos=new_pos,
+            delta=1000.0,
+        )
+
     completed_at = task.completed_at
-    if schema.status == TaskStatus.DONE and task.status != TaskStatus.DONE:
+    if new_status == TaskStatus.DONE and old_status != TaskStatus.DONE:
         completed_at = datetime.now(timezone.utc)
-    elif schema.status != TaskStatus.DONE and task.status == TaskStatus.DONE:
+    elif new_status != TaskStatus.DONE and old_status == TaskStatus.DONE:
         completed_at = None
 
     await task_repo.update(
         task,
         {
-            "status": schema.status,
-            "position": schema.position,
+            "status": new_status,
+            "position": new_pos,
             "completed_at": completed_at,
         },
     )
 
     hydrated = await task_repo.get_task_with_details(task.id)
+
+    await event_bus.publish(
+        AuditEvent(
+            action="TASK_MOVED",
+            entity_type="Task",
+            entity_id=str(task.id),
+            user_id=current_user.id if current_user else None,
+            changes_payload={
+                "old_status": old_status.value,
+                "new_status": new_status.value,
+                "old_position": old_pos,
+                "new_position": new_pos,
+            },
+        ),
+        session=session,
+    )
+
     return _build_task_response(hydrated or task)
 
 
@@ -198,26 +373,53 @@ async def update_task(
     task_id: int,
     schema: UpdateTaskRequest,
     session: AsyncSession,
+    current_user: User | None = None,
 ) -> TaskResponse:
-    """Updates general task attributes and status.
+    """Updates general task attributes and status with ABAC ownership and team assignee checks.
 
     Args:
         task_id: Target task integer ID.
         schema: Validated fields to update.
         session: Active asynchronous database session.
+        current_user: Optional authenticated user for ownership enforcement.
 
     Returns:
         Updated TaskResponse.
 
     Raises:
-        NotFoundException: If task is not found.
+        NotFoundException: If task or project is not found.
+        ForbiddenException: If developer attempts to update a task they do not own.
+        BusinessRuleViolationException: If assigned user does not belong to project team.
     """
+    from src.modules.project.repository import ProjectRepository
+
     task_repo = TaskRepository(session=session)
     task = await task_repo.get_by_id(task_id)
     if task is None:
         raise NotFoundException(entity="Task", identifier=task_id)
 
+    project_repo = ProjectRepository(session=session)
+    project = await project_repo.get_by_id(task.project_id)
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=task.project_id)
+
+    if current_user is not None:
+        await _validate_task_ownership(
+            task=task,
+            current_user=current_user,
+            team_id=project.team_id,
+            session=session,
+        )
+
     update_dict = schema.model_dump(exclude_unset=True)
+
+    # Validate assignee belongs to the project's owning team
+    if "assignee_to_id" in update_dict and update_dict["assignee_to_id"] is not None:
+        await _validate_assignee_in_team(
+            team_id=project.team_id,
+            assignee_id=update_dict["assignee_to_id"],
+            session=session,
+        )
 
     if "status" in update_dict:
         new_status = update_dict["status"]
@@ -403,4 +605,31 @@ async def delete_comment(
     raise ForbiddenException(
         message="Cannot delete comments authored by other developers.",
         error_code="PERMISSION_DENIED",
+    )
+
+
+async def list_my_tasks(
+    user_id: int,
+    session: AsyncSession,
+    offset: int = 0,
+    limit: int = 50,
+) -> PageResult[TaskResponse]:
+    """Retrieves all active tasks assigned to the caller across their active teams.
+
+    Args:
+        user_id: Assignee user integer ID.
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
+
+    Returns:
+        PageResult of hydrated TaskResponse instances.
+    """
+    task_repo = TaskRepository(session=session)
+    page = await task_repo.get_user_assigned_tasks(user_id=user_id, offset=offset, limit=limit)
+    return PageResult(
+        items=[_build_task_response(t) for t in page.items],
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
     )

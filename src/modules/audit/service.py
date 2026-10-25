@@ -3,10 +3,34 @@
 from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.share import AuditEvent, event_bus
 from src.share.responses import PageResult
 from .model import AuditLog
 from .repository import AuditRepository
 from .schemas import AuditLogResponse
+
+
+async def on_audit_event(event: AuditEvent, session: AsyncSession | None) -> None:
+    """Asynchronous event bus handler that records domain facts to the audit trail."""
+    if session is None:
+        return
+    await record_audit_event(
+        session=session,
+        action=event.action,
+        entity_type=event.entity_type,
+        entity_id=event.entity_id,
+        user_id=event.user_id,
+        changes_payload=event.changes_payload,
+        ip_address=event.ip_address or (event.audit_ctx.ip_address if event.audit_ctx else None),
+    )
+
+
+def register_audit_subscribers() -> None:
+    """Subscribes the audit handler to domain events on the event bus."""
+    event_bus.subscribe(AuditEvent, on_audit_event)
+
+
+register_audit_subscribers()
 
 
 def _build_audit_response(log: AuditLog) -> AuditLogResponse:

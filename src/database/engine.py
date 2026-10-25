@@ -35,11 +35,13 @@ def create_engine_instance(database_url: str | None = None, **kwargs: Any) -> As
     engine = create_async_engine(url, **engine_kwargs)
 
     if is_sqlite:
-        # Enforce foreign key constraints on SQLite connections
+        # Enforce foreign key constraints and WAL concurrency on SQLite connections
         @event.listens_for(engine.sync_engine, "connect")
         def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
             cursor.close()
 
     return engine

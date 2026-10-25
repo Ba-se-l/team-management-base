@@ -178,10 +178,10 @@ async def test_public_inquiry_submission_and_honeypot(
         "honeypot": "https://spamlink.ru/trap",
     }
     bot_resp = await client.post("/api/v1/public/inquiries", json=bot_payload)
-    # Silently returns 201 with id=0
+    # Silently returns 201 with realistic fake ID without persisting
     assert bot_resp.status_code == 201
     bot_data = bot_resp.json()
-    assert bot_data["id"] == 0
+    assert bot_data["id"] > 0
 
     # Verify BOT WAS NOT STORED in DB
     bot_stmt = select(ServiceInquiry).where(ServiceInquiry.client_email == "bot@spamnetwork.ru")

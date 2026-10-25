@@ -127,6 +127,17 @@ async def update_member_role(
             )
 
     membership = await member_repo.update(membership, {"role": schema.role})
+
+    # Post-mutation invariant check to strictly defeat concurrent race conditions
+    if schema.role != TeamRole.ADMIN:
+        remaining_count = await member_repo.count_active_admins(team_id)
+        if remaining_count < 1:
+            await session.rollback()
+            raise BusinessRuleViolationException(
+                message="Cannot remove or demote the sole team administrator.",
+                error_code="LAST_ADMIN_CANNOT_BE_REMOVED",
+            )
+
     user_repo = UserRepository(session=session)
     user = await user_repo.get_by_id(user_id)
     return _build_member_response(membership, user)
@@ -162,6 +173,15 @@ async def remove_member(
             )
 
     await member_repo.delete(membership)
+
+    # Post-deletion invariant check to strictly defeat concurrent race conditions
+    remaining_count = await member_repo.count_active_admins(team_id)
+    if remaining_count < 1:
+        await session.rollback()
+        raise BusinessRuleViolationException(
+            message="Cannot remove the sole team leader.",
+            error_code="LAST_ADMIN_CANNOT_BE_REMOVED",
+        )
 
 
 async def list_team_members(

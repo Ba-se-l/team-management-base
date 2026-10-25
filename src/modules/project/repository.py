@@ -93,6 +93,47 @@ class ProjectRepository(BaseRepository[Project]):
 
         return await self.paginate(stmt, offset=offset, limit=limit)
 
+    async def get_accessible_projects(
+        self,
+        user_id: int,
+        is_super_admin: bool = False,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> PageResult[Project]:
+        """Retrieves paginated active projects accessible to a user.
+
+        Super admins can access all active projects across all teams.
+        Standard users can only access active projects belonging to teams
+        where they are an active member.
+
+        Args:
+            user_id: User integer primary key.
+            is_super_admin: Whether the user is a super admin.
+            offset: Record offset.
+            limit: Page size limit.
+
+        Returns:
+            PageResult of Project instances with technologies loaded.
+        """
+        from src.modules.team_members.models import TeamMember
+
+        stmt = (
+            select(Project)
+            .options(selectinload(Project.technologies))
+            .where(Project.is_active.is_(True))
+        )
+
+        if not is_super_admin:
+            stmt = stmt.join(
+                TeamMember,
+                (TeamMember.team_id == Project.team_id)
+                & (TeamMember.member_id == user_id)
+                & (TeamMember.is_active.is_(True)),
+            )
+
+        stmt = stmt.order_by(Project.id.desc())
+        return await self.paginate(stmt, offset=offset, limit=limit)
+
     async def list_all_projects(
         self,
         offset: int = 0,

@@ -893,10 +893,10 @@ async function loadInquiriesTriage() {
                 ${inquiries.map(inq => `
                     <tr style="border-bottom: 1px solid var(--border-subtle);">
                         <td style="padding: 10px;">#${inq.id}</td>
-                        <td style="padding: 10px; font-weight: 600;">${escapeHtml(inq.name)}</td>
-                        <td style="padding: 10px; color: var(--text-secondary);">${escapeHtml(inq.email)}</td>
-                        <td style="padding: 10px;">${escapeHtml(inq.company || '-')}</td>
-                        <td style="padding: 10px;">${escapeHtml(inq.budget || '-')}</td>
+                        <td style="padding: 10px; font-weight: 600;">${escapeHtml(inq.client_name || inq.name)}</td>
+                        <td style="padding: 10px; color: var(--text-secondary);">${escapeHtml(inq.client_email || inq.email)}</td>
+                        <td style="padding: 10px;">${escapeHtml(inq.company_name || inq.company || '-')}</td>
+                        <td style="padding: 10px;">${escapeHtml(inq.budget_range || inq.budget || '-')}</td>
                         <td style="padding: 10px;">
                             <span class="status-pill ${inq.status === 'ACCEPTED' ? 'status-active' : inq.status === 'PENDING' ? 'status-planning' : 'status-completed'}">${escapeHtml(inq.status)}</span>
                         </td>

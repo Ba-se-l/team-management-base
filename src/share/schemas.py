@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+from typing import Any
 from typing_extensions import TypedDict
 from pydantic import BaseModel, ConfigDict
 
@@ -71,6 +72,29 @@ class DomainEvent:
 
     audit_ctx: AuditContext | None = None
     """Optional telemetry context captured when the event was emitted."""
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AuditEvent(DomainEvent):
+    """Domain event representing an auditable action across business domains."""
+
+    action: str
+    """Action identifier (e.g. 'TASK_CREATED', 'TASK_MOVED', 'PROJECT_CREATED')."""
+
+    entity_type: str
+    """Target entity type name (e.g. 'Task', 'Project', 'Team', 'Inquiry')."""
+
+    entity_id: str | None = None
+    """Identifier of the entity affected."""
+
+    user_id: int | None = None
+    """ID of the user who performed the action."""
+
+    changes_payload: dict[str, Any] | None = None
+    """Structured diff or payload of changes."""
+
+    ip_address: str | None = None
+    """Client IP address recorded during the action."""
 
 
 class TokenPayload(BaseModel):

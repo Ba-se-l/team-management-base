@@ -6,16 +6,25 @@ from src.database import UserStatus, JobTitle
 
 
 class CreateUserRequest(BaseModel):
-    """Schema for user registration request"""
+    """Schema for administrator user creation request."""
 
     name: str = Field(..., min_length=1, max_length=100)
-    """The user's full name"""
+    """The user's full name."""
 
     email: str = Field(..., min_length=5, max_length=100, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
-    """Them user's email address, `Must` be uniqe"""
+    """The user's email address, must be unique."""
 
     password: str = Field(..., min_length=8, max_length=100)
-    """The user's plain-text password. Will be hashed before storage"""
+    """The user's plain-text password. Will be hashed before storage."""
+
+    username: str | None = Field(default=None, min_length=3, max_length=50)
+    """Optional unique username. Generated from email if omitted."""
+
+    job_title: JobTitle | None = Field(default=None)
+    """Optional initial job title."""
+
+    is_super_admin: bool = Field(default=False)
+    """Whether the user receives platform super administrator privileges."""
 
 
 class UpdateSchemaRequest(BaseModel):
@@ -63,6 +72,19 @@ class UserResponse(BaseModel):
     security_version: int = 1
     created_at: datetime
     updated_at: datetime
+
+
+class DeveloperDashboardResponse(BaseModel):
+    """Aggregated workload statistics and metric counts for developer dashboard."""
+
+    total_assigned_tasks: int
+    pending_tasks: int
+    in_progress_tasks: int
+    review_tasks: int
+    completed_tasks: int
+    overdue_tasks: int
+    active_teams_count: int
+    active_projects_count: int
 
 
 

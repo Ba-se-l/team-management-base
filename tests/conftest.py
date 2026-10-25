@@ -13,7 +13,10 @@ from sqlalchemy.pool import StaticPool
 from src.database.base import Base
 from src.database.session import get_session
 from src.main import app
+from src.modules.audit.service import register_audit_subscribers
+from src.security.authorization import reset_casbin_enforcer
 from src.share.event_bus import event_bus
+from src.share.rate_limit import RateLimiter
 
 # In-memory SQLite async engine dedicated for automated test execution
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -38,6 +41,10 @@ async def setup_test_database() -> AsyncGenerator[None, None]:
     # Import registry to guarantee all 12 declarative models are indexed
     import src.database.registry  # noqa: F401
 
+    RateLimiter.reset_all()
+    register_audit_subscribers()
+    await reset_casbin_enforcer()
+
     async with test_async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -46,8 +53,9 @@ async def setup_test_database() -> AsyncGenerator[None, None]:
     async with test_async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
-    # Clear event handlers between tests
+    RateLimiter.reset_all()
     await event_bus.clear()
+    await reset_casbin_enforcer()
 
 
 @pytest.fixture

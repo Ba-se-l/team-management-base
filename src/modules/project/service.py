@@ -8,6 +8,7 @@ from src.exc import AlreadyExistsException, NotFoundException
 from src.modules.team.repository import TeamRepository
 from src.modules.technology.models import Technology
 from src.modules.user.models import User
+from src.share import AuditEvent, event_bus
 from src.share.helpers import slugify
 from src.share.responses import PageResult
 from .models import Project
@@ -95,6 +96,18 @@ async def create_project(
     await session.flush()
 
     hydrated = await project_repo.get_by_id_with_techs(project.id)
+
+    await event_bus.publish(
+        AuditEvent(
+            action="PROJECT_CREATED",
+            entity_type="Project",
+            entity_id=str(project.id),
+            user_id=creator.id,
+            changes_payload={"title": project.title, "team_id": project.team_id, "slug": project.slug},
+        ),
+        session=session,
+    )
+
     return await _hydrate_project_response(hydrated or project, project_repo)
 
 
@@ -229,6 +242,44 @@ async def list_team_projects(
         for p in page.items
     ]
 
+    return PageResult(
+        items=items,
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
+    )
+
+
+async def list_accessible_projects(
+    user_id: int,
+    is_super_admin: bool,
+    session: AsyncSession,
+    offset: int = 0,
+    limit: int = 50,
+) -> PageResult[ProjectResponse]:
+    """Retrieves all active projects accessible to a user across their teams.
+
+    Args:
+        user_id: User integer primary key.
+        is_super_admin: Whether the user is a super admin.
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
+
+    Returns:
+        PageResult of hydrated ProjectResponse instances.
+    """
+    project_repo = ProjectRepository(session=session)
+    page = await project_repo.get_accessible_projects(
+        user_id=user_id,
+        is_super_admin=is_super_admin,
+        offset=offset,
+        limit=limit,
+    )
+    items = [
+        await _hydrate_project_response(p, project_repo)
+        for p in page.items
+    ]
     return PageResult(
         items=items,
         total=page.total,

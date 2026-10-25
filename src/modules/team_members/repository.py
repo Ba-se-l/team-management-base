@@ -1,11 +1,12 @@
 """Team member domain repository for membership persistence."""
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.database import BaseRepository
 from src.database.enums import TeamRole
+from src.modules.team.models import Team
 from src.modules.team_members.models import TeamMember
 from src.share.responses import PageResult
 
@@ -34,7 +35,7 @@ class TeamMemberRepository(BaseRepository[TeamMember]):
         return await self.get_by_attr(member_id=member_id, team_id=team_id)
 
     async def count_active_admins(self, team_id: int) -> int:
-        """Counts how many active users hold ADMIN role within a team.
+        """Counts how many active users hold ADMIN role within a team with write lock.
 
         Args:
             team_id: Target team integer ID.
@@ -42,12 +43,21 @@ class TeamMemberRepository(BaseRepository[TeamMember]):
         Returns:
             Total count of active team administrators.
         """
-        stmt = select(func.count(TeamMember.member_id)).where(
-            TeamMember.team_id == team_id,
-            TeamMember.role == TeamRole.ADMIN,
-            TeamMember.is_active.is_(True),
+        # Touch team record to convert transaction to exclusive lock, preventing race conditions
+        await self.session.execute(
+            update(Team).where(Team.id == team_id).values(updated_at=func.now())
         )
-        return await self.session.scalar(stmt) or 0
+        stmt = (
+            select(TeamMember)
+            .where(
+                TeamMember.team_id == team_id,
+                TeamMember.role == TeamRole.ADMIN,
+                TeamMember.is_active.is_(True),
+            )
+            .with_for_update()
+        )
+        result = await self.session.execute(stmt)
+        return len(result.scalars().all())
 
     async def get_team_members(
         self,

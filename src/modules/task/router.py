@@ -98,6 +98,27 @@ async def get_kanban_board(
 
 
 @top_level_router.get(
+    "/my",
+    response_model=PageResult[TaskResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get current user assigned tasks",
+)
+async def get_my_tasks(
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> PageResult[TaskResponse]:
+    """Retrieves all active tasks assigned to the authenticated user across active teams."""
+    return await service.list_my_tasks(
+        user_id=current_user.id,
+        session=session,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@top_level_router.get(
     "/{task_id}",
     response_model=TaskResponse,
     status_code=status.HTTP_200_OK,
@@ -122,12 +143,14 @@ async def get_task(
 async def update_task(
     task_id: int,
     request: UpdateTaskRequest,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TaskResponse:
     """Updates general task fields (title, description, status, priority, assignee)."""
     return await service.update_task(
         task_id=task_id,
         schema=request,
+        current_user=current_user,
         session=session,
     )
 
@@ -142,12 +165,14 @@ async def update_task(
 async def move_task(
     task_id: int,
     request: MoveTaskRequest,
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TaskResponse:
     """Updates task status column and position for drag-and-drop workflow."""
     return await service.move_task(
         task_id=task_id,
         schema=request,
+        current_user=current_user,
         session=session,
     )
 

@@ -11,12 +11,42 @@ from typing import Annotated
 
 from src.conf import settings
 from src.database import get_session
+from src.exc import ForbiddenException
 from src.modules.auth.dependencies import get_current_user
 from .models import User
-from .schemas import UserResponse, UpdateSchemaRequest, ChangePasswordRequest
+from .schemas import (
+    ChangePasswordRequest,
+    CreateUserRequest,
+    DeveloperDashboardResponse,
+    UpdateSchemaRequest,
+    UserResponse,
+)
 from . import service
 
 router = APIRouter(prefix=f"{settings.API_PREFIX}/users", tags=["Users"])
+
+
+async def _require_super_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Enforces that the caller is a super administrator."""
+    if not current_user.is_super_admin:
+        raise ForbiddenException("Super administrator access required.", error_code="SUPER_ADMIN_REQUIRED")
+    return current_user
+
+
+@router.post(
+    "",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Provision user (Admin only)",
+    dependencies=[Depends(_require_super_admin)],
+)
+async def create_user(
+    request: CreateUserRequest,
+    session: AsyncSession = Depends(get_session),
+) -> UserResponse:
+    """Provisions a new developer or administrator account. Resticted to super admins."""
+    user = await service.create_user(schema=request, session=session)
+    return UserResponse.model_validate(user)
 
 
 @router.get(
@@ -30,6 +60,20 @@ async def get_me(
 ) -> UserResponse:
     """Returns the profile of the currently authenticated user."""
     return UserResponse.model_validate(current_user)
+
+
+@router.get(
+    "/me/dashboard",
+    response_model=DeveloperDashboardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get developer dashboard metrics",
+)
+async def get_my_dashboard(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> DeveloperDashboardResponse:
+    """Returns aggregated workload metrics and task breakdowns for the current developer."""
+    return await service.get_developer_dashboard(user_id=current_user.id, session=session)
 
 
 @router.patch(
