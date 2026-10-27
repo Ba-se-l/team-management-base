@@ -8,13 +8,13 @@ from src.database import UserStatus, JobTitle
 class CreateUserRequest(BaseModel):
     """Schema for administrator user creation request."""
 
-    name: str = Field(..., min_length=1, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
     """The user's full name."""
 
-    email: str = Field(..., min_length=5, max_length=100, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
+    email: EmailStr = Field()
     """The user's email address, must be unique."""
 
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(min_length=8, max_length=100)
     """The user's plain-text password. Will be hashed before storage."""
 
     username: str | None = Field(default=None, min_length=3, max_length=50)
@@ -43,10 +43,10 @@ class UpdateSchemaRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     """Schema for password change request"""
 
-    old_password: str = Field(..., min_length=8)
+    old_password: str = Field(min_length=8)
     """Current password for verification"""
 
-    new_password: str = Field(..., min_length=8, max_length=100)
+    new_password: str = Field(min_length=8, max_length=100)
     """New password to set"""
 
 

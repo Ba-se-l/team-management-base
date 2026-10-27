@@ -123,6 +123,7 @@ async def test_kanban_positioning_and_shifting_invariants(
         json={"status": "todo", "position": 1500.0},
     )
     assert move_resp1.status_code == 200
+    assert move_resp1.json()["position"] == pytest.approx(1500.0)
 
     # Query all tasks and assert no duplicate positions exist
     res = await db_session.execute(
@@ -141,6 +142,7 @@ async def test_kanban_positioning_and_shifting_invariants(
     assert move_done.status_code == 200
     task_done_data = move_done.json()
     assert task_done_data["status"] == "done"
+    assert task_done_data["position"] == pytest.approx(1000.0)
     assert task_done_data["completed_at"] is not None
 
     # 4. Move Task 1 back to IN_PROGRESS (completed_at must revert to None)
@@ -150,6 +152,7 @@ async def test_kanban_positioning_and_shifting_invariants(
         json={"status": "in_progress", "position": 1000.0},
     )
     assert move_back.status_code == 200
+    assert move_back.json()["position"] == pytest.approx(1000.0)
     assert move_back.json()["completed_at"] is None
 
 

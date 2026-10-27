@@ -1,20 +1,20 @@
 """Authentication domain request and response Pydantic schemas."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from src.modules.user.schemas import UserResponse
 
 
 class LoginRequest(BaseModel):
     """Schema for user login credentials."""
 
-    email: str = Field(..., pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    password: str = Field(..., min_length=1)
+    email: EmailStr = Field()
+    password: str = Field(min_length=1)
 
-    @field_validator("email", mode="before")
+    @field_validator("email", mode="after")
     @classmethod
-    def normalize_email(cls, v: str) -> str:
+    def normalize_email(cls, v: EmailStr) -> str:
         """Normalizes email to lowercase and strips whitespace."""
-        return v.strip().lower()
+        return str(v).strip().lower()
 
 
 class TokenResponse(BaseModel):

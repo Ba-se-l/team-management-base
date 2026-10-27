@@ -19,7 +19,7 @@ class ProjectRepository(BaseRepository[Project]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=Project, session=session)
+        super().__init__(class_=Project, session=session)
 
     async def get_by_slug(self, slug: str) -> Project | None:
         """Retrieves a project by its URL-friendly slug with technologies eager loaded.

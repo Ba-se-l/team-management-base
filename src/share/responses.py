@@ -6,11 +6,9 @@ Every endpoint on the platform wraps its payload in either ``SuccessResponse``,
 """
 
 import math
-from typing import Any, Generic, TypeVar
+from typing import Annotated, Any
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
-
-_T = TypeVar("_T")
 
 
 class PaginationParams:
@@ -18,8 +16,8 @@ class PaginationParams:
 
     def __init__(
         self,
-        page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-        page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+        page: Annotated[int, Query(ge=1, description="Page number (1-indexed)")] = 1,
+        page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
     ) -> None:
         self.page = page
         self.page_size = page_size
@@ -67,12 +65,12 @@ class PaginationMeta(BaseModel):
         )
 
 
-class PageResult(BaseModel, Generic[_T]):
+class PageResult[T](BaseModel):
     """Internal repository return model containing items, total count, and pagination window."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    items: list[_T]
+    items: list[T]
     """List of retrieved model instances."""
 
     total: int
@@ -85,7 +83,7 @@ class PageResult(BaseModel, Generic[_T]):
     """Record limit."""
 
 
-class PaginatedResponse(BaseModel, Generic[_T]):
+class PaginatedResponse[T](BaseModel):
     """Generic envelope for paginated collection responses."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -93,7 +91,7 @@ class PaginatedResponse(BaseModel, Generic[_T]):
     success: bool = True
     """Always True for successful operations."""
 
-    data: list[_T]
+    data: list[T]
     """Current slice of items."""
 
     pagination: PaginationMeta
@@ -126,7 +124,7 @@ class ErrorResponse(BaseModel):
     """Distributed correlation ID for server-side log tracing."""
 
 
-class SuccessResponse(BaseModel, Generic[_T]):
+class SuccessResponse[T](BaseModel):
     """Generic single-item success response envelope."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -134,7 +132,7 @@ class SuccessResponse(BaseModel, Generic[_T]):
     success: bool = True
     """Always True for successful operations."""
 
-    data: _T
+    data: T
     """Result payload."""
 
 

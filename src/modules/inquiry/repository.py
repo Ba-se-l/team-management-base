@@ -18,7 +18,7 @@ class InquiryRepository(BaseRepository[ServiceInquiry]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=ServiceInquiry, session=session)
+        super().__init__(class_=ServiceInquiry, session=session)
 
     async def list_filtered(
         self,

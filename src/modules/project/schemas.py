@@ -21,9 +21,9 @@ class ProjectTechnologySummary(BaseModel):
 class CreateProjectRequest(BaseModel):
     """Schema for creating a new project in a team workspace."""
 
-    title: str = Field(..., min_length=2, max_length=150)
+    title: str = Field(min_length=2, max_length=150)
     slug: str | None = Field(default=None, max_length=160)
-    short_description: str = Field(..., min_length=5, max_length=500)
+    short_description: str = Field(min_length=5, max_length=500)
     description: str | None = Field(default=None)
     visibility: ProjectVisibility = Field(default=ProjectVisibility.PRIVATE)
     status: ProjectStatus = Field(default=ProjectStatus.PLANNING)

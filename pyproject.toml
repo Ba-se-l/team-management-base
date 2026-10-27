@@ -32,3 +32,6 @@ dev = [
 asyncio_mode = "auto"
 pythonpath = ["."]
 
+[tool.fastapi]
+entrypoint = "src.main:app"
+

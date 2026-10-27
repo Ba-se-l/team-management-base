@@ -1,7 +1,7 @@
 """Service inquiry request and response schemas."""
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 from src.database.enums import InquiryServiceType, InquiryStatus
 
@@ -11,32 +11,31 @@ class CreateInquiryRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    client_name: str = Field(..., min_length=2, max_length=100)
-    client_email: EmailStr = Field(...)
-    company_name: str | None = Field(default=None, max_length=150)
+    client_name: str = Field(
+        validation_alias=AliasChoices("client_name", "name"),
+        min_length=2,
+        max_length=100,
+    )
+    client_email: EmailStr = Field(
+        validation_alias=AliasChoices("client_email", "email"),
+    )
+    company_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("company_name", "company"),
+        max_length=150,
+    )
     service_type: InquiryServiceType = Field(default=InquiryServiceType.OTHER)
-    budget_range: str | None = Field(default=None, max_length=50)
-    message: str = Field(..., min_length=10, max_length=3000)
-    honeypot: str | None = Field(default=None, description="Hidden bot trap field")
-
-    @model_validator(mode="before")
-    @classmethod
-    def _remap_aliases(cls, data: object) -> object:
-        """Seamlessly maps frontend field aliases to canonical schema fields."""
-        if isinstance(data, dict):
-            mapped = dict(data)
-            if "name" in mapped and "client_name" not in mapped:
-                mapped["client_name"] = mapped.pop("name")
-            if "email" in mapped and "client_email" not in mapped:
-                mapped["client_email"] = mapped.pop("email")
-            if "company" in mapped and "company_name" not in mapped:
-                mapped["company_name"] = mapped.pop("company")
-            if "budget" in mapped and "budget_range" not in mapped:
-                mapped["budget_range"] = mapped.pop("budget")
-            if "company_website" in mapped and "honeypot" not in mapped:
-                mapped["honeypot"] = mapped.pop("company_website")
-            return mapped
-        return data
+    budget_range: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("budget_range", "budget"),
+        max_length=50,
+    )
+    message: str = Field(min_length=10, max_length=3000)
+    honeypot: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("honeypot", "company_website"),
+        description="Hidden bot trap field",
+    )
 
 
 class UpdateInquiryStatusRequest(BaseModel):

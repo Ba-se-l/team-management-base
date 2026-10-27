@@ -14,35 +14,35 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.base import Base
 from src.share.responses import PageResult
 
-_MT = TypeVar("_MT", bound=Base)
+_O = TypeVar("_O", bound=Base)
 logger = logging.getLogger(__name__)
 
 
-class BaseRepository(Generic[_MT]):
+class BaseRepository(Generic[_O]):
     """Generic repository providing hardened CRUD operations for SQLAlchemy models."""
 
-    def __init__(self, model: type[_MT], session: AsyncSession) -> None:
+    def __init__(self, class_: type[_O], session: AsyncSession) -> None:
         """Initializes the repository.
 
         Args:
-            model: Declarative model class managed by this repository.
+            class_: Declarative model class managed by this repository.
             session: Active asynchronous database session.
         """
-        self.model = model
+        self.model = class_
         self.session = session
 
-    async def get_by_id(self, id: int) -> _MT | None:
+    async def get_by_id(self, id: Any) -> _O | None:
         """Retrieves a single record by its primary key.
 
         Args:
-            id: Primary key integer.
+            id: Primary key (integer, UUID, or composite).
 
         Returns:
             Model instance if found, otherwise None.
         """
         return await self.session.get(self.model, id)
 
-    async def get_by_attr(self, **kw: Any) -> _MT | None:
+    async def get_by_attr(self, **kw: Any) -> _O | None:
         """Retrieves a single record matching dynamic keyword attribute filters.
 
         Args:
@@ -72,11 +72,11 @@ class BaseRepository(Generic[_MT]):
 
     async def paginate(
         self,
-        stmt: Select[tuple[_MT]] | Select[_MT],
+        stmt: Select[tuple[_O]] | Select[_O],
         *,
         offset: int = 0,
         limit: int = 20,
-    ) -> PageResult[_MT]:
+    ) -> PageResult[_O]:
         """Paginates an arbitrary SQLAlchemy query, computing total matching rows via subquery.
 
         Args:
@@ -104,7 +104,7 @@ class BaseRepository(Generic[_MT]):
         *,
         offset: int = 0,
         limit: int = 20,
-    ) -> PageResult[_MT]:
+    ) -> PageResult[_O]:
         """Retrieves a paginated list of all records for this model.
 
         Args:
@@ -119,7 +119,7 @@ class BaseRepository(Generic[_MT]):
             stmt = stmt.order_by(getattr(self.model, "id"))
         return await self.paginate(stmt, offset=offset, limit=limit)
 
-    async def create(self, instance: _MT) -> _MT:
+    async def create(self, instance: _O) -> _O:
         """Persists a new entity instance, flushing and refreshing generated fields.
 
         Args:
@@ -133,7 +133,7 @@ class BaseRepository(Generic[_MT]):
         await self.session.refresh(instance)
         return instance
 
-    async def update(self, instance: _MT, update_data: dict[str, Any]) -> _MT:
+    async def update(self, instance: _O, update_data: dict[str, Any]) -> _O:
         """Applies an update dictionary to a tracked entity, updating timestamps.
 
         Args:
@@ -154,7 +154,7 @@ class BaseRepository(Generic[_MT]):
         await self.session.refresh(instance)
         return instance
 
-    async def delete(self, instance: _MT) -> bool:
+    async def delete(self, instance: _O) -> bool:
         """Deletes an entity instance within the current transaction.
 
         Args:

@@ -20,7 +20,7 @@ class TeamMemberRepository(BaseRepository[TeamMember]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=TeamMember, session=session)
+        super().__init__(class_=TeamMember, session=session)
 
     async def get_membership(self, member_id: int, team_id: int) -> TeamMember | None:
         """Retrieves a specific membership record by composite primary key.

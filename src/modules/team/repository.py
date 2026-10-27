@@ -19,7 +19,7 @@ class TeamRepository(BaseRepository[Team]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=Team, session=session)
+        super().__init__(class_=Team, session=session)
 
     async def get_by_slug(self, slug: str) -> Team | None:
         """Retrieves a team workspace by its unique URL slug.

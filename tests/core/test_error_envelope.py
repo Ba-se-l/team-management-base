@@ -7,7 +7,6 @@ from src.main import app
 
 
 from fastapi import APIRouter
-from starlette.routing import Mount
 
 error_probe_router = APIRouter(prefix="/api/v1/test-error")
 
@@ -32,16 +31,37 @@ async def _trigger_server_crash():
 
 app.include_router(error_probe_router)
 
-# Ensure StaticFiles Mount remains at the very end of routes to prevent shadowing API routes
-_mounts = [r for r in app.router.routes if isinstance(r, Mount)]
-_others = [r for r in app.router.routes if not isinstance(r, Mount)]
-app.router.routes = _others + _mounts
+
+@pytest.mark.parametrize(
+    "path, expected_status, expected_code",
+    [
+        ("/api/v1/test-error/domain-not-found", 404, "PROJECT_NOT_FOUND"),
+        ("/api/v1/test-error/business-violation", 422, "LAST_ADMIN_CANNOT_BE_REMOVED"),
+        ("/api/v1/non-existent-endpoint-xyz", 404, "NOT_FOUND"),
+        ("/api/v1/test-error/server-crash", 500, "INTERNAL_SERVER_ERROR"),
+    ],
+    ids=["domain_not_found", "business_violation", "unmapped_route", "unhandled_crash"],
+)
+@pytest.mark.asyncio
+async def test_error_envelope_matrix(
+    client: AsyncClient,
+    path: str,
+    expected_status: int,
+    expected_code: str,
+) -> None:
+    """Verifies standard ErrorResponse envelope structure across HTTP error scenarios."""
+    response = await client.get(path)
+    assert response.status_code == expected_status
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == expected_code
+    assert payload["request_id"] is not None
 
 
 @pytest.mark.asyncio
-async def test_not_found_returns_standard_error_envelope(async_client: AsyncClient) -> None:
+async def test_not_found_returns_standard_error_envelope(client: AsyncClient) -> None:
     """Verifies that NotFoundException returns HTTP 404 with standard ErrorResponse envelope."""
-    response = await async_client.get("/api/v1/test-error/domain-not-found", headers={"X-Request-ID": "req-404-test"})
+    response = await client.get("/api/v1/test-error/domain-not-found", headers={"X-Request-ID": "req-404-test"})
 
     assert response.status_code == 404
     payload = response.json()
@@ -54,9 +74,9 @@ async def test_not_found_returns_standard_error_envelope(async_client: AsyncClie
 
 
 @pytest.mark.asyncio
-async def test_business_rule_violation_envelope(async_client: AsyncClient) -> None:
+async def test_business_rule_violation_envelope(client: AsyncClient) -> None:
     """Verifies that BusinessRuleViolationException returns HTTP 422 with rule code."""
-    response = await async_client.get("/api/v1/test-error/business-violation")
+    response = await client.get("/api/v1/test-error/business-violation")
 
     assert response.status_code == 422
     payload = response.json()
@@ -67,9 +87,9 @@ async def test_business_rule_violation_envelope(async_client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_starlette_http_404_envelope(async_client: AsyncClient) -> None:
+async def test_starlette_http_404_envelope(client: AsyncClient) -> None:
     """Verifies that accessing an unmapped route returns standard ErrorResponse envelope."""
-    response = await async_client.get("/api/v1/non-existent-endpoint-xyz")
+    response = await client.get("/api/v1/non-existent-endpoint-xyz")
 
     assert response.status_code == 404
     payload = response.json()
@@ -81,10 +101,10 @@ async def test_starlette_http_404_envelope(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_unhandled_exception_returns_500_envelope_without_leaking_trace(
-    async_client: AsyncClient,
+    client: AsyncClient,
 ) -> None:
     """Verifies that uncaught server errors return 500 without leaking internal stack traces."""
-    response = await async_client.get("/api/v1/test-error/server-crash")
+    response = await client.get("/api/v1/test-error/server-crash")
 
     assert response.status_code == 500
     payload = response.json()

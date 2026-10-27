@@ -1,11 +1,10 @@
 """Public showcase router providing unauthenticated read access to agency portfolio and team profiles."""
 
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Path, Query, Response, status
 
 from src.conf import settings
-from src.database.session import get_session
+from src.share.dependencies import SessionDep
 from src.share.responses import PageResult
 from . import service
 from .schemas import (
@@ -26,13 +25,12 @@ def _set_cache_headers(response: Response, max_age: int = 60) -> None:
 
 @router.get(
     "/overview",
-    response_model=PublicOverview,
     status_code=status.HTTP_200_OK,
     summary="Get public agency overview and statistics",
 )
 async def get_overview(
     response: Response,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> PublicOverview:
     """Retrieves high-level platform statistics, featured portfolio projects, and tech catalog."""
     _set_cache_headers(response, max_age=60)
@@ -41,17 +39,16 @@ async def get_overview(
 
 @router.get(
     "/projects",
-    response_model=PageResult[PublicProjectCard],
     status_code=status.HTTP_200_OK,
     summary="List public showcase projects",
 )
 async def list_projects(
     response: Response,
-    technology: str | None = Query(default=None, description="Filter by technology slug"),
-    featured: bool | None = Query(default=None, description="Filter by featured status"),
+    session: SessionDep,
+    technology: Annotated[str | None, Query(description="Filter by technology slug")] = None,
+    featured: Annotated[bool | None, Query(description="Filter by featured status")] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    session: AsyncSession = Depends(get_session),
 ) -> PageResult[PublicProjectCard]:
     """Retrieves paginated projects marked with public visibility."""
     _set_cache_headers(response, max_age=60)
@@ -66,14 +63,13 @@ async def list_projects(
 
 @router.get(
     "/projects/{slug}",
-    response_model=PublicProjectDetail,
     status_code=status.HTTP_200_OK,
     summary="Get public project details",
 )
 async def get_project(
-    slug: str,
+    slug: Annotated[str, Path(min_length=1, description="Project slug")],
     response: Response,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> PublicProjectDetail:
     """Retrieves public project portfolio details, tech stack, and metadata."""
     _set_cache_headers(response, max_age=60)
@@ -82,15 +78,14 @@ async def get_project(
 
 @router.get(
     "/members",
-    response_model=PageResult[PublicMember],
     status_code=status.HTTP_200_OK,
     summary="List public agency team members",
 )
 async def list_members(
     response: Response,
+    session: SessionDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    session: AsyncSession = Depends(get_session),
 ) -> PageResult[PublicMember]:
     """Retrieves developers who opted into the public agency roster."""
     _set_cache_headers(response, max_age=60)
@@ -99,14 +94,13 @@ async def list_members(
 
 @router.get(
     "/technologies",
-    response_model=list[PublicTechnologySummary],
     status_code=status.HTTP_200_OK,
     summary="List available showcase technologies",
 )
 async def list_technologies(
     response: Response,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> list[PublicTechnologySummary]:
     """Retrieves technology catalog for showcase filtering."""
-    _set_cache_headers(response, max_age=120)
+    _set_cache_headers(response, max_age=60)
     return await service.list_public_technologies(session=session)

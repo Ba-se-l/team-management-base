@@ -25,7 +25,7 @@ class UserRepository(BaseRepository[User]):
         Args:
             session: The async database session instance.
         """
-        super().__init__(model=User, session=session)
+        super().__init__(class_=User, session=session)
 
     async def get_by_id_or_raise(self, id: int) -> User:
         """Fetches a user by primary key or raises if not found.

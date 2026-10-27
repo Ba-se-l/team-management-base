@@ -1,15 +1,12 @@
 """Authentication domain router implementing cookie-backed token lifecycle and identity endpoints."""
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.conf import settings
-from src.database.session import get_session
 from src.exc import ForbiddenException, InvalidCredentialsException
-from src.modules.user.models import User
+from src.share.dependencies import CurrentUserDep, SessionDep
 from src.share.rate_limit import RateLimiter
 from . import service
-from .dependencies import get_current_user
 from .schemas import (
     LoginRequest,
     RefreshRequest,
@@ -38,7 +35,6 @@ async def register() -> None:
 
 @router.post(
     "/login",
-    response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
     summary="Login and receive session token",
     description="Authenticates credentials and establishes session via HttpOnly cookie and JWT access token.",
@@ -48,7 +44,7 @@ async def login(
     request_data: LoginRequest,
     response: Response,
     request: Request,
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> TokenResponse:
     """Authenticates a user and sets an HttpOnly rotational refresh cookie."""
     ua = request.headers.get("user-agent")
@@ -73,7 +69,6 @@ async def login(
 
 @router.post(
     "/refresh",
-    response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
     summary="Rotate refresh token",
     description="Exchanges active refresh token for a rotated pair; defends against replay attacks.",
@@ -81,8 +76,8 @@ async def login(
 async def refresh(
     request: Request,
     response: Response,
+    session: SessionDep,
     body: RefreshRequest | None = None,
-    session: AsyncSession = Depends(get_session),
 ) -> TokenResponse:
     """Rotates refresh token and issues fresh access token."""
     cookie_token = request.cookies.get(settings.REFRESH_COOKIE_NAME)
@@ -119,8 +114,8 @@ async def refresh(
 async def logout_endpoint(
     request: Request,
     response: Response,
+    session: SessionDep,
     body: RefreshRequest | None = None,
-    session: AsyncSession = Depends(get_session),
 ) -> dict[str, str]:
     """Revokes the active refresh token and clears the authentication cookie."""
     token_str = request.cookies.get(settings.REFRESH_COOKIE_NAME) or (body.refresh_token if body else None)
@@ -143,8 +138,8 @@ async def logout_endpoint(
 )
 async def logout_all_endpoint(
     response: Response,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    current_user: CurrentUserDep,
+    session: SessionDep,
 ) -> dict[str, str]:
     """Terminates all active sessions across all devices for the authenticated user."""
     await service.logout_all(user_id=current_user.id, session=session)
@@ -159,13 +154,12 @@ async def logout_all_endpoint(
 
 @router.get(
     "/me",
-    response_model=UserMeResponse,
     status_code=status.HTTP_200_OK,
     summary="Get current user profile and team memberships",
 )
 async def get_me(
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    current_user: CurrentUserDep,
+    session: SessionDep,
 ) -> UserMeResponse:
     """Returns the authenticated user's profile and active workspace memberships."""
     return await service.get_user_me(user=current_user, session=session)

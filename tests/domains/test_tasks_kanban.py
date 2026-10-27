@@ -117,7 +117,7 @@ async def test_create_task_in_project(
     assert task_data["assignee_to_id"] == alice.id
     assert task_data["assignee_username"] == alice.username
     assert task_data["completed_at"] is None
-    assert task_data["position"] == 1000.0
+    assert task_data["position"] == pytest.approx(1000.0)
 
 
 @pytest.mark.asyncio
@@ -168,7 +168,7 @@ async def test_move_task_kanban_updates_status_and_completed_at(
     assert move_done_resp.status_code == 200
     done_data = move_done_resp.json()
     assert done_data["status"] == TaskStatus.DONE.value
-    assert done_data["position"] == 1.5
+    assert done_data["position"] == pytest.approx(1.5)
     assert done_data["completed_at"] is not None
 
     # Move task back to IN_PROGRESS -> completed_at is reset to None

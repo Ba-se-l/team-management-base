@@ -20,7 +20,7 @@ class RefreshSessionRepository(BaseRepository[RefreshSession]):
         Args:
             session: The active async database session.
         """
-        super().__init__(model=RefreshSession, session=session)
+        super().__init__(class_=RefreshSession, session=session)
 
     async def get_by_jti(self, jti: str) -> RefreshSession | None:
         """Fetches a refresh session by its unique JTI claim.

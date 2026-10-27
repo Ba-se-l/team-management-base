@@ -19,7 +19,7 @@ class AuditRepository(BaseRepository[AuditLog]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=AuditLog, session=session)
+        super().__init__(class_=AuditLog, session=session)
 
     async def log_event(
         self,

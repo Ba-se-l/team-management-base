@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class CreateTeamRequest(BaseModel):
     """Schema for creating a new team workspace."""
 
-    name: str = Field(..., min_length=2, max_length=100)
+    name: str = Field(min_length=2, max_length=100)
     slug: str | None = Field(default=None, max_length=120)
     description: str | None = Field(default=None, max_length=500)
 

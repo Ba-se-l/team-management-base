@@ -5,10 +5,10 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_health_check_returns_ok_and_propagates_request_id(async_client: AsyncClient) -> None:
+async def test_health_check_returns_ok_and_propagates_request_id(client: AsyncClient) -> None:
     """Verifies that /health returns 200 with status healthy and sets X-Request-ID header."""
     custom_request_id = "test-corr-id-12345"
-    response = await async_client.get("/health", headers={"X-Request-ID": custom_request_id})
+    response = await client.get("/health", headers={"X-Request-ID": custom_request_id})
 
     assert response.status_code == 200
     data = response.json()
@@ -18,9 +18,9 @@ async def test_health_check_returns_ok_and_propagates_request_id(async_client: A
 
 
 @pytest.mark.asyncio
-async def test_health_check_generates_request_id_when_not_provided(async_client: AsyncClient) -> None:
+async def test_health_check_generates_request_id_when_not_provided(client: AsyncClient) -> None:
     """Verifies that X-Request-ID is automatically generated if not supplied."""
-    response = await async_client.get("/health")
+    response = await client.get("/health")
 
     assert response.status_code == 200
     generated_id = response.headers.get("X-Request-ID")

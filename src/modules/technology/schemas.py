@@ -5,7 +5,7 @@ from datetime import datetime
 
 class CreateTechnologyRequest(BaseModel):
 
-    name: str = Field(..., max_length=100)
+    name: str = Field(max_length=100)
     description: str | None = Field(default=None, min_length=10, max_length=1000)
     documentation_url: str | None = Field(default=None, max_length=500)
 

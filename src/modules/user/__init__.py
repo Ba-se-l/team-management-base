@@ -7,7 +7,6 @@ from .models import User
 from .repository import UserRepository
 from .exceptions import UserNotFoundException, UserAlreadyExistsException, UserInactiveException
 from .schemas import UserResponse
-from .router import router
 
 __all__ = (
     # from models.py
@@ -27,3 +26,11 @@ __all__ = (
     # from router.py
     'router',
 )
+
+
+def __getattr__(name: str):
+    """PEP 562 lazy loading for router to prevent circular dependencies."""
+    if name == "router":
+        from .router import router
+        return router
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")

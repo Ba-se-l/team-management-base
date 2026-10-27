@@ -25,14 +25,14 @@ class TaskCommentResponse(BaseModel):
 class CreateCommentRequest(BaseModel):
     """Schema for adding a comment to a task."""
 
-    content: str = Field(..., min_length=1)
+    content: str = Field(min_length=1)
 
 
 class CreateTaskRequest(BaseModel):
     """Schema for creating a work item in a project."""
 
-    title: str = Field(..., min_length=2, max_length=200)
-    description: str = Field(..., min_length=1)
+    title: str = Field(min_length=2, max_length=200)
+    description: str = Field(min_length=1)
     status: TaskStatus = Field(default=TaskStatus.TODO)
     priority: TaskPriority = Field(default=TaskPriority.MEDIUM)
     position: float | None = Field(default=None)

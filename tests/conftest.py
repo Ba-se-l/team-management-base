@@ -65,8 +65,8 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@pytest.fixture
-async def async_client() -> AsyncGenerator[AsyncClient, None]:
+@pytest.fixture(scope="function")
+async def client() -> AsyncGenerator[AsyncClient, None]:
     """Provides an asynchronous HTTP test client wired to the FastAPI application."""
 
     async def _override_get_session() -> AsyncGenerator[AsyncSession, None]:
@@ -81,13 +81,13 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_session] = _override_get_session
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client_instance:
+        yield client_instance
 
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-async def client(async_client: AsyncClient) -> AsyncClient:
-    """Convenience alias for async_client fixture."""
-    return async_client
+@pytest.fixture(scope="function")
+async def async_client(client: AsyncClient) -> AsyncClient:
+    """Backward-compatible alias for canonical client fixture."""
+    return client

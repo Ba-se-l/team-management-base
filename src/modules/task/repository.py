@@ -19,7 +19,7 @@ class TaskRepository(BaseRepository[Task]):
         Args:
             session: Active asynchronous database session.
         """
-        super().__init__(model=Task, session=session)
+        super().__init__(class_=Task, session=session)
 
     async def get_task_with_details(self, task_id: int) -> Task | None:
         """Retrieves a single task with author, assignee, and comments with author info.

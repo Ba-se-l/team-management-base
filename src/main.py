@@ -8,7 +8,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from src.conf import settings
 from src.database.engine import async_engine
@@ -60,8 +59,8 @@ async def health_check() -> dict[str, str]:
 # Include the master API router
 app.include_router(api_router)
 
-# Mount the static frontend interface
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve the static frontend SPA via native FastAPI frontend routing
+app.frontend("/", directory="static")
 
 
 if __name__ == "__main__":

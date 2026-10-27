@@ -157,42 +157,40 @@ async def setup_security_matrix(db_session: AsyncSession) -> dict[str, User | Te
     }
 
 
+@pytest.mark.parametrize(
+    "email, expected_slugs, forbidden_slugs",
+    [
+        ("alice@matrix.io", ["alpha-core"], ["beta-secret"]),
+        ("outsider@matrix.io", ["beta-secret"], ["alpha-core"]),
+        ("superadmin@matrix.io", ["alpha-core", "beta-secret"], []),
+    ],
+    ids=["alice_team_alpha_scoped", "outsider_team_beta_scoped", "superadmin_unrestricted"],
+)
 @pytest.mark.asyncio
 async def test_cross_team_project_isolation(
     client: AsyncClient,
     setup_security_matrix: dict[str, User | Team | Project],
+    email: str,
+    expected_slugs: list[str],
+    forbidden_slugs: list[str],
 ) -> None:
     """Verifies that non-super-admins cannot view projects belonging to teams they do not belong to."""
-    # 1. Anonymous access is strictly rejected
+    headers = await _login_and_get_headers(client, email, "SecurePass123!")
+    resp = await client.get("/api/v1/projects", headers=headers)
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    slugs = [p["slug"] for p in items]
+    for s in expected_slugs:
+        assert s in slugs
+    for s in forbidden_slugs:
+        assert s not in slugs
+
+
+@pytest.mark.asyncio
+async def test_anonymous_project_listing_rejected(client: AsyncClient) -> None:
+    """Verifies unauthenticated access to projects is rejected with HTTP 401."""
     unauth_resp = await client.get("/api/v1/projects")
     assert unauth_resp.status_code == 401
-
-    # 2. Team Alpha dev (Alice) sees only Alpha projects
-    alice_headers = await _login_and_get_headers(client, "alice@matrix.io", "SecurePass123!")
-    resp_alice = await client.get("/api/v1/projects", headers=alice_headers)
-    assert resp_alice.status_code == 200
-    items_alice = resp_alice.json()["items"]
-    slugs_alice = [p["slug"] for p in items_alice]
-    assert "alpha-core" in slugs_alice
-    assert "beta-secret" not in slugs_alice
-
-    # 3. Team Beta dev (Outsider) sees only Beta projects
-    outsider_headers = await _login_and_get_headers(client, "outsider@matrix.io", "SecurePass123!")
-    resp_outsider = await client.get("/api/v1/projects", headers=outsider_headers)
-    assert resp_outsider.status_code == 200
-    items_outsider = resp_outsider.json()["items"]
-    slugs_outsider = [p["slug"] for p in items_outsider]
-    assert "beta-secret" in slugs_outsider
-    assert "alpha-core" not in slugs_outsider
-
-    # 4. Super Admin sees all projects across all teams
-    super_headers = await _login_and_get_headers(client, "superadmin@matrix.io", "SecurePass123!")
-    resp_super = await client.get("/api/v1/projects", headers=super_headers)
-    assert resp_super.status_code == 200
-    items_super = resp_super.json()["items"]
-    slugs_super = [p["slug"] for p in items_super]
-    assert "alpha-core" in slugs_super
-    assert "beta-secret" in slugs_super
 
 
 @pytest.mark.asyncio
