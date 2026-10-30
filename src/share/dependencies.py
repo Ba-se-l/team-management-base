@@ -14,8 +14,8 @@ from src.modules.user.models import User
 from src.security.guards import require_super_admin
 from src.share.responses import PaginationParams
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
-"""Asynchronous SQLAlchemy database session dependency."""
+SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
+"""Asynchronous SQLAlchemy database session dependency (function-scoped so commit runs before HTTP response)."""
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 """Authenticated user ORM instance dependency."""

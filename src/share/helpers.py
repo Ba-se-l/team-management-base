@@ -67,7 +67,7 @@ def resolve_client_ip(request: Request) -> str:
 
 
 def slugify(text: str, fallback: str = "item") -> str:
-    """Generates a URL-friendly slug supporting both ASCII and Unicode (Arabic/multilingual).
+    """Generates a URL-friendly slug supporting both ASCII, tech symbols, and Unicode (Arabic/multilingual).
 
     Args:
         text: Input string to slugify.
@@ -79,13 +79,24 @@ def slugify(text: str, fallback: str = "item") -> str:
     if not text:
         return fallback
 
+    text = str(text)
+    # Preserve semantic distinction for common programming symbols (e.g. C++, C#, Node.js)
+    symbol_map = {
+        "+": "-plus-",
+        "#": "-sharp-",
+        ".": "-dot-",
+        "&": "-and-",
+    }
+    for sym, replacement in symbol_map.items():
+        text = text.replace(sym, replacement)
+
     text = unicodedata.normalize("NFKC", text).lower().strip()
     # Replace spaces and underscores with hyphens
     text = re.sub(r"[\s_]+", "-", text)
     # Remove characters that are neither word characters nor hyphens
     text = re.sub(r"[^\w\-]+", "", text, flags=re.UNICODE)
     # Collapse multiple hyphens
-    text = re.sub(r"-+", "-", text).strip("-")
+    text = re.sub(r"-+", "-", text).strip("-_")
 
     return text or fallback
 

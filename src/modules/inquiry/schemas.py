@@ -9,7 +9,7 @@ from src.database.enums import InquiryServiceType, InquiryStatus
 class CreateInquiryRequest(BaseModel):
     """Public proposal submission request with bot honeypot protection."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, str_strip_whitespace=True)
 
     client_name: str = Field(
         validation_alias=AliasChoices("client_name", "name"),
@@ -41,6 +41,8 @@ class CreateInquiryRequest(BaseModel):
 class UpdateInquiryStatusRequest(BaseModel):
     """Administrative inquiry triage and notes schema."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     status: InquiryStatus
     admin_notes: str | None = Field(default=None, max_length=1000)
 
@@ -58,5 +60,6 @@ class InquiryResponse(BaseModel):
     budget_range: str | None = None
     message: str
     status: InquiryStatus
+    admin_notes: str | None = None
     created_at: datetime
     updated_at: datetime

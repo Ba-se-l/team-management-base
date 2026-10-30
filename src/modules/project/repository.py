@@ -115,12 +115,17 @@ class ProjectRepository(BaseRepository[Project]):
         Returns:
             PageResult of Project instances with technologies loaded.
         """
+        from src.modules.team.models import Team
         from src.modules.team_members.models import TeamMember
 
         stmt = (
             select(Project)
             .options(selectinload(Project.technologies))
-            .where(Project.is_active.is_(True))
+            .join(Team, Team.id == Project.team_id)
+            .where(
+                Project.is_active.is_(True),
+                Team.is_active.is_(True),
+            )
         )
 
         if not is_super_admin:
@@ -180,3 +185,40 @@ class ProjectRepository(BaseRepository[Project]):
         total_tasks = await self.session.scalar(total_stmt) or 0
         completed_tasks = await self.session.scalar(completed_stmt) or 0
         return total_tasks, completed_tasks
+
+    async def get_batch_task_counts(self, project_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Calculates (total_tasks, completed_tasks) for a batch of projects in a single GROUP BY query.
+
+        Args:
+            project_ids: List of project integer primary keys.
+
+        Returns:
+            Mapping of project_id -> (total_tasks, completed_tasks).
+        """
+        if not project_ids:
+            return {}
+
+        from sqlalchemy import case
+        from src.modules.task.models import Task
+
+        stmt = (
+            select(
+                Task.project_id,
+                func.count(Task.id),
+                func.coalesce(
+                    func.sum(case((Task.status == TaskStatus.DONE, 1), else_=0)),
+                    0,
+                ),
+            )
+            .where(
+                Task.project_id.in_(project_ids),
+                Task.is_active.is_(True),
+            )
+            .group_by(Task.project_id)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        counts_map = {
+            int(pid): (int(total or 0), int(done or 0))
+            for pid, total, done in rows
+        }
+        return {pid: counts_map.get(pid, (0, 0)) for pid in project_ids}

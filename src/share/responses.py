@@ -1,8 +1,8 @@
-"""Standardized API response envelopes and pagination schemas.
+"""Standardized API pagination schemas, error envelopes, and response models.
 
-Every endpoint on the platform wraps its payload in either ``SuccessResponse``,
-``PaginatedResponse``, or ``MessageResponse``. Error handlers uniformly return
-``ErrorResponse``.
+Paginated endpoints return ``PageResult[T]`` (``items``, ``total``, ``offset``, ``limit``),
+single-item endpoints return their domain response schema directly, and all error
+handlers uniformly return ``ErrorResponse``.
 """
 
 import math

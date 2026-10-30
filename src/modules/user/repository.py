@@ -5,7 +5,7 @@ email lookups and active-user filtering.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from src.database import BaseRepository
 from .models import User
@@ -45,7 +45,7 @@ class UserRepository(BaseRepository[User]):
         raise UserNotFoundException(identifier=str(id))
 
     async def check_if_exist_by_email(self, email: str) -> bool:
-        """Checks whether a user with the given email exists.
+        """Checks whether a user with the given email exists (case-insensitive).
 
         Args:
             email: The email address to check.
@@ -53,10 +53,10 @@ class UserRepository(BaseRepository[User]):
         Returns:
             ``True`` if a user with this email exists, ``False`` otherwise.
         """
-        return bool(await self.get_one_by_attribute(email=email))
+        return (await self.get_by_email(email=email)) is not None
 
     async def get_by_email(self, email: str) -> User | None:
-        """Fetches a user by their email address.
+        """Fetches a user by their normalized email address (case-insensitive).
 
         Args:
             email: The email address to look up.
@@ -64,7 +64,18 @@ class UserRepository(BaseRepository[User]):
         Returns:
             The ``User`` instance if found, otherwise ``None``.
         """
-        return await self.get_one_by_attribute(email=email)
+        normalized = email.strip().lower()
+        stmt = select(User).where(func.lower(User.email) == normalized)
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def count_active_super_admins(self) -> int:
+        """Counts the number of currently active super administrators."""
+        stmt = select(func.count(User.id)).where(
+            User.is_super_admin.is_(True),
+            User.is_active.is_(True),
+        )
+        return await self.session.scalar(stmt) or 0
 
     async def get_active_users(self, skip: int = 0, limit: int = 20) -> list[User]:
         """Retrieves a paginated list of active users.

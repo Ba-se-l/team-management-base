@@ -9,11 +9,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from sqlalchemy import select
 from src.conf import settings
 from src.database.engine import async_engine
 from src.exc import register_exception_handlers
 from src.modules import api_router
 from src.share import RequestIdMiddleware
+from src.share.dependencies import SessionDep
 
 
 @asynccontextmanager
@@ -52,8 +54,15 @@ register_exception_handlers(app)
 
 @app.get("/health", tags=["Health"])
 async def health_check() -> dict[str, str]:
-    """Health check probe returning service status."""
+    """Liveness check probe returning service status."""
     return {"status": "healthy", "service": "team-management-base"}
+
+
+@app.get("/health/ready", tags=["Health"])
+async def readiness_check(session: SessionDep) -> dict[str, str]:
+    """Readiness probe verifying active database connectivity."""
+    await session.execute(select(1))
+    return {"status": "ready", "database": "connected", "service": "team-management-base"}
 
 
 # Include the master API router

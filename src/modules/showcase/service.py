@@ -52,9 +52,14 @@ async def get_public_overview(session: AsyncSession) -> PublicOverview:
         Populated PublicOverview DTO.
     """
     total_teams_stmt = select(func.count(Team.id)).where(Team.is_active.is_(True))
-    total_projects_stmt = select(func.count(Project.id)).where(
-        Project.is_active.is_(True),
-        Project.visibility == ProjectVisibility.PUBLIC,
+    total_projects_stmt = (
+        select(func.count(Project.id))
+        .join(Team, Team.id == Project.team_id)
+        .where(
+            Project.is_active.is_(True),
+            Project.visibility == ProjectVisibility.PUBLIC,
+            Team.is_active.is_(True),
+        )
     )
     total_members_stmt = select(func.count(User.id)).where(
         User.is_active.is_(True),
@@ -65,14 +70,16 @@ async def get_public_overview(session: AsyncSession) -> PublicOverview:
     total_projects = await session.scalar(total_projects_stmt) or 0
     total_members = await session.scalar(total_members_stmt) or 0
 
-    # Retrieve up to 6 featured public projects
+    # Retrieve up to 6 featured public projects belonging to active teams
     featured_stmt = (
         select(Project)
+        .join(Team, Team.id == Project.team_id)
         .options(selectinload(Project.team), selectinload(Project.technologies))
         .where(
             Project.is_active.is_(True),
             Project.visibility == ProjectVisibility.PUBLIC,
             Project.featured.is_(True),
+            Team.is_active.is_(True),
         )
         .order_by(Project.id.desc())
         .limit(6)
@@ -115,10 +122,12 @@ async def list_public_projects(
     """
     stmt = (
         select(Project)
+        .join(Team, Team.id == Project.team_id)
         .options(selectinload(Project.team), selectinload(Project.technologies))
         .where(
             Project.is_active.is_(True),
             Project.visibility == ProjectVisibility.PUBLIC,
+            Team.is_active.is_(True),
         )
         .order_by(Project.id.desc())
     )
@@ -163,11 +172,13 @@ async def get_public_project(slug: str, session: AsyncSession) -> PublicProjectD
     """
     stmt = (
         select(Project)
+        .join(Team, Team.id == Project.team_id)
         .options(selectinload(Project.team), selectinload(Project.technologies))
         .where(
             Project.slug == slug,
             Project.is_active.is_(True),
             Project.visibility == ProjectVisibility.PUBLIC,
+            Team.is_active.is_(True),
         )
     )
     project = (await session.execute(stmt)).scalars().first()

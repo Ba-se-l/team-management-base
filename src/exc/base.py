@@ -24,6 +24,7 @@ class AppException(Exception):
         error_code: str,
         status_code: int = 500,
         details: Any | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         """Initializes the base application exception.
 
@@ -32,11 +33,13 @@ class AppException(Exception):
             error_code: Machine-readable error identifier.
             status_code: HTTP status code. Defaults to 500.
             details: Optional structured details dictionary or list.
+            headers: Optional HTTP response headers to attach.
         """
         self.message = message
         self.error_code = error_code
         self.status_code = status_code
         self.details = details
+        self.headers = headers
         super().__init__(self.message)
 
 
@@ -129,11 +132,16 @@ class InactiveEntityException(AppException):
 class InvalidCredentialsException(AppException):
     """Raised when login credentials or JWT verification fails."""
 
-    def __init__(self, message: str = "Invalid email or password.") -> None:
+    def __init__(
+        self,
+        message: str = "Invalid email or password.",
+        error_code: str = "INVALID_CREDENTIALS",
+    ) -> None:
         super().__init__(
             message=message,
-            error_code="INVALID_CREDENTIALS",
+            error_code=error_code,
             status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -145,6 +153,7 @@ class TokenRevokedException(AppException):
             message=message,
             error_code="TOKEN_REVOKED",
             status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 
@@ -159,6 +168,7 @@ class TokenStaleException(AppException):
             message=message,
             error_code="TOKEN_STALE",
             status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
 

@@ -26,11 +26,10 @@ login_rate_limiter = RateLimiter(requests_limit=settings.LOGIN_RATE_LIMIT, windo
 )
 async def register() -> None:
     """Enforces closed platform policy by blocking open user registrations."""
-    if not settings.ALLOW_PUBLIC_REGISTRATION:
-        raise ForbiddenException(
-            "Public self-registration is disabled. Accounts must be provisioned by a platform administrator.",
-            error_code="REGISTRATION_DISABLED",
-        )
+    raise ForbiddenException(
+        "Public self-registration is disabled. Accounts must be provisioned by a platform administrator.",
+        error_code="REGISTRATION_DISABLED",
+    )
 
 
 @router.post(

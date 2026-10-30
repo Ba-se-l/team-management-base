@@ -9,7 +9,9 @@ from .security import (
     decode_access_token,
     decode_refresh_token,
     hash_password,
+    hash_password_async,
     verify_password,
+    verify_password_async,
 )
 
 
@@ -25,7 +27,9 @@ def __getattr__(name: str) -> Any:
 __all__ = (
     "CasbinRule",
     "hash_password",
+    "hash_password_async",
     "verify_password",
+    "verify_password_async",
     "create_access_token",
     "create_refresh_token",
     "decode_access_token",

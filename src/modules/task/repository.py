@@ -148,6 +148,80 @@ class TaskRepository(BaseRepository[Task]):
         )
         await self.session.execute(stmt)
 
+    async def rebalance_column_around_task(
+        self,
+        project_id: int,
+        status: TaskStatus,
+        moved_task: Task,
+        target_position: float | None,
+    ) -> float:
+        """Places moved_task into the status column and enforces strictly increasing unique positions.
+
+        Args:
+            project_id: Owning project integer ID.
+            status: Target workflow column status.
+            moved_task: The Task ORM instance being inserted or moved.
+            target_position: Desired position float, or None to append at the end.
+
+        Returns:
+            The final float position assigned to moved_task.
+        """
+        stmt = (
+            select(Task)
+            .where(
+                Task.project_id == project_id,
+                Task.status == status,
+                Task.is_active.is_(True),
+                Task.id != moved_task.id,
+            )
+            .order_by(Task.position.asc(), Task.id.asc())
+        )
+        siblings = list((await self.session.execute(stmt)).scalars().all())
+
+        if target_position is None:
+            max_pos = siblings[-1].position if siblings else 0.0
+            final_pos = float(max(1000.0, max_pos + 1000.0))
+            moved_task.position = final_pos
+            await self.session.flush()
+            return final_pos
+
+        if target_position <= 0.0:
+            final_pos = 1000.0
+            moved_task.position = final_pos
+            prev_pos = final_pos
+            for sib in siblings:
+                if sib.position <= prev_pos:
+                    sib.position = prev_pos + 1000.0
+                prev_pos = sib.position
+            await self.session.flush()
+            return final_pos
+
+        final_pos = float(target_position)
+        moved_task.position = final_pos
+
+        before = [s for s in siblings if s.position < final_pos]
+        after = [s for s in siblings if s.position >= final_pos]
+
+        prev = 0.0
+        for sib in before:
+            if sib.position <= prev:
+                sib.position = prev + 1000.0
+            prev = sib.position
+
+        if before and before[-1].position >= final_pos:
+            step = final_pos / (len(before) + 1)
+            for idx, sib in enumerate(before, start=1):
+                sib.position = round(step * idx, 4)
+
+        curr = final_pos
+        for sib in after:
+            if sib.position <= curr:
+                sib.position = curr + 1000.0
+            curr = sib.position
+
+        await self.session.flush()
+        return final_pos
+
     async def get_user_assigned_tasks(
         self,
         user_id: int,
@@ -162,10 +236,21 @@ class TaskRepository(BaseRepository[Task]):
             limit: Limit per page.
 
         Returns:
-            PageResult of Task instances.
+            PageResult of Task instances ordered by semantic priority and deadline.
         """
+        from sqlalchemy import case
+        from src.database.enums import TaskPriority
         from src.modules.project.models import Project
+        from src.modules.team.models import Team
         from src.modules.team_members.models import TeamMember
+
+        priority_rank = case(
+            (Task.priority == TaskPriority.CRITICAL, 4),
+            (Task.priority == TaskPriority.HIGH, 3),
+            (Task.priority == TaskPriority.MEDIUM, 2),
+            (Task.priority == TaskPriority.LOW, 1),
+            else_=0,
+        )
 
         stmt = (
             select(Task)
@@ -175,6 +260,7 @@ class TaskRepository(BaseRepository[Task]):
                 selectinload(Task.comments).selectinload(TaskComment.author),
             )
             .join(Project, Project.id == Task.project_id)
+            .join(Team, Team.id == Project.team_id)
             .join(
                 TeamMember,
                 (TeamMember.team_id == Project.team_id)
@@ -185,8 +271,13 @@ class TaskRepository(BaseRepository[Task]):
                 Task.assignee_to_id == user_id,
                 Task.is_active.is_(True),
                 Project.is_active.is_(True),
+                Team.is_active.is_(True),
             )
-            .order_by(Task.deadline.asc().nulls_last(), Task.priority.desc(), Task.id.desc())
+            .order_by(
+                priority_rank.desc(),
+                Task.deadline.asc().nulls_last(),
+                Task.id.desc(),
+            )
         )
         return await self.paginate(stmt, offset=offset, limit=limit)
 

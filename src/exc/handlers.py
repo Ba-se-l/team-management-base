@@ -2,8 +2,10 @@
 
 import logging
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.share.responses import ErrorDetail, ErrorResponse
@@ -28,6 +30,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
     return JSONResponse(
         status_code=exc.status_code,
         content=envelope.model_dump(exclude_none=True),
+        headers=getattr(exc, "headers", None),
     )
 
 
@@ -45,7 +48,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
     return JSONResponse(
         status_code=422,
-        content=envelope.model_dump(exclude_none=True),
+        content=jsonable_encoder(envelope.model_dump(exclude_none=True)),
     )
 
 
@@ -53,6 +56,9 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     """Handles standard Starlette HTTP exceptions (e.g. 404, 405)."""
     req_id = getattr(request.state, "request_id", None)
     code = _HTTP_ERROR_CODE_MAP.get(exc.status_code, "HTTP_ERROR")
+    headers = dict(exc.headers) if exc.headers else None
+    if exc.status_code == 401 and (not headers or "WWW-Authenticate" not in headers):
+        headers = {**(headers or {}), "WWW-Authenticate": "Bearer"}
     envelope = ErrorResponse(
         success=False,
         error=ErrorDetail(
@@ -63,6 +69,30 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     )
     return JSONResponse(
         status_code=exc.status_code,
+        content=envelope.model_dump(exclude_none=True),
+        headers=headers,
+    )
+
+
+async def integrity_exception_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    """Handles database constraint violations (e.g. unique index collisions) with 409 Conflict."""
+    req_id = getattr(request.state, "request_id", None)
+    logger.warning(
+        "Database integrity error on %s [request_id=%s]: %s",
+        request.url.path,
+        req_id or "N/A",
+        exc,
+    )
+    envelope = ErrorResponse(
+        success=False,
+        error=ErrorDetail(
+            code="CONFLICT_ERROR",
+            message="Resource conflict or database constraint violation.",
+        ),
+        request_id=req_id,
+    )
+    return JSONResponse(
+        status_code=409,
         content=envelope.model_dump(exclude_none=True),
     )
 
@@ -94,4 +124,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+    app.add_exception_handler(IntegrityError, integrity_exception_handler)
     app.add_exception_handler(Exception, global_exception_handler)

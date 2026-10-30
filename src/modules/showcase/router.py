@@ -18,9 +18,10 @@ from .schemas import (
 router = APIRouter(prefix=f"{settings.API_PREFIX}/public", tags=["Public Showcase"])
 
 
-def _set_cache_headers(response: Response, max_age: int = 60) -> None:
+def _set_cache_headers(response: Response, max_age: int | None = None) -> None:
     """Sets standard Cache-Control header for static public endpoints."""
-    response.headers["Cache-Control"] = f"public, max-age={max_age}"
+    ttl = max_age if max_age is not None else settings.PUBLIC_CACHE_MAX_AGE_SECONDS
+    response.headers["Cache-Control"] = f"public, max-age={ttl}"
 
 
 @router.get(
@@ -33,7 +34,7 @@ async def get_overview(
     session: SessionDep,
 ) -> PublicOverview:
     """Retrieves high-level platform statistics, featured portfolio projects, and tech catalog."""
-    _set_cache_headers(response, max_age=60)
+    _set_cache_headers(response)
     return await service.get_public_overview(session=session)
 
 
@@ -51,7 +52,7 @@ async def list_projects(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageResult[PublicProjectCard]:
     """Retrieves paginated projects marked with public visibility."""
-    _set_cache_headers(response, max_age=60)
+    _set_cache_headers(response)
     return await service.list_public_projects(
         session=session,
         technology_slug=technology,
@@ -72,7 +73,7 @@ async def get_project(
     session: SessionDep,
 ) -> PublicProjectDetail:
     """Retrieves public project portfolio details, tech stack, and metadata."""
-    _set_cache_headers(response, max_age=60)
+    _set_cache_headers(response)
     return await service.get_public_project(slug=slug, session=session)
 
 
@@ -88,7 +89,7 @@ async def list_members(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageResult[PublicMember]:
     """Retrieves developers who opted into the public agency roster."""
-    _set_cache_headers(response, max_age=60)
+    _set_cache_headers(response)
     return await service.list_public_members(session=session, offset=offset, limit=limit)
 
 
@@ -102,5 +103,5 @@ async def list_technologies(
     session: SessionDep,
 ) -> list[PublicTechnologySummary]:
     """Retrieves technology catalog for showcase filtering."""
-    _set_cache_headers(response, max_age=60)
+    _set_cache_headers(response)
     return await service.list_public_technologies(session=session)

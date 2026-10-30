@@ -112,6 +112,7 @@ async def get_project(
 async def update_project(
     project_id: Annotated[int, Path(ge=1, description="Project ID")],
     request: UpdateProjectRequest,
+    current_user: CurrentUserDep,
     session: SessionDep,
 ) -> ProjectResponse:
     """Updates project properties and technology stack associations."""
@@ -119,6 +120,7 @@ async def update_project(
         project_id=project_id,
         schema=request,
         session=session,
+        current_user=current_user,
     )
 
 

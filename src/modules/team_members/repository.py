@@ -8,6 +8,7 @@ from src.database import BaseRepository
 from src.database.enums import TeamRole
 from src.modules.team.models import Team
 from src.modules.team_members.models import TeamMember
+from src.modules.user.models import User
 from src.share.responses import PageResult
 
 
@@ -49,10 +50,12 @@ class TeamMemberRepository(BaseRepository[TeamMember]):
         )
         stmt = (
             select(TeamMember)
+            .join(User, User.id == TeamMember.member_id)
             .where(
                 TeamMember.team_id == team_id,
                 TeamMember.role == TeamRole.ADMIN,
                 TeamMember.is_active.is_(True),
+                User.is_active.is_(True),
             )
             .with_for_update()
         )

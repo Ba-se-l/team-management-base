@@ -70,6 +70,14 @@ function setupModeNavigation() {
 // -----------------------------------------------------------------------------
 // Authentication & Profiles
 // -----------------------------------------------------------------------------
+function unwrapCurrentUser(meData) {
+    if (!meData) return null;
+    if (meData.user) {
+        return { ...meData.user, memberships: meData.memberships || [] };
+    }
+    return meData;
+}
+
 async function checkInitialAuth() {
     const token = localStorage.getItem('access_token');
     if (!token) {
@@ -78,7 +86,8 @@ async function checkInitialAuth() {
     }
 
     try {
-        const user = await apiGetCurrentUser();
+        const meData = await apiGetCurrentUser();
+        const user = unwrapCurrentUser(meData);
         state.currentUser = user;
         updateAuthDisplay(user);
     } catch {
@@ -94,7 +103,7 @@ function updateAuthDisplay(user) {
     const btnLogout = document.getElementById('btn-logout');
 
     if (user) {
-        userDisplay.textContent = `${user.full_name || user.email}`;
+        userDisplay.textContent = `${user.name || user.full_name || user.username || user.email}`;
         userDot.style.background = 'var(--accent-emerald)';
         userDot.style.boxShadow = '0 0 8px var(--accent-emerald)';
         authBtnLabel.textContent = 'Account';
@@ -108,12 +117,33 @@ function updateAuthDisplay(user) {
     }
 }
 
+function clearWorkspaceStateAndDOM() {
+    state.projects = [];
+    state.activeProjectId = null;
+    state.kanbanTasks = [];
+    state.currentDetailTask = null;
+    clearKanbanColumns();
+    const selector = document.getElementById('select-kanban-project');
+    if (selector) selector.innerHTML = '<option value="">Sign in to view projects</option>';
+    const wsProjects = document.getElementById('ws-projects-grid');
+    if (wsProjects) wsProjects.innerHTML = '<div style="color: var(--text-muted);">Please sign in to view internal projects.</div>';
+    const wsTeams = document.getElementById('ws-teams-container');
+    if (wsTeams) wsTeams.innerHTML = '<div style="color: var(--text-muted);">Please sign in to view engineering teams.</div>';
+    const wsInq = document.getElementById('inquiries-table-container');
+    if (wsInq) wsInq.innerHTML = '<div style="color: var(--text-muted);">Please sign in as Super Admin to view inquiries.</div>';
+}
+
 function setupAuthListeners() {
     const btnOpenAuth = document.getElementById('btn-open-auth');
     const btnLogout = document.getElementById('btn-logout');
     const formLogin = document.getElementById('form-auth-login');
     const btnQuickAdmin = document.getElementById('btn-quick-admin');
     const btnQuickDev = document.getElementById('btn-quick-dev');
+    const demoContainer = document.getElementById('demo-profiles-container');
+
+    if (demoContainer && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+        demoContainer.style.display = 'block';
+    }
 
     btnOpenAuth.addEventListener('click', () => {
         if (!state.currentUser) {
@@ -127,9 +157,10 @@ function setupAuthListeners() {
         await apiLogout();
         state.currentUser = null;
         updateAuthDisplay(null);
+        clearWorkspaceStateAndDOM();
         showToast('Successfully logged out.');
         if (state.currentMode === 'workspace') {
-            loadWorkspaceProjects();
+            document.getElementById('btn-mode-showcase').click();
         }
     });
 
@@ -139,11 +170,12 @@ function setupAuthListeners() {
         const password = document.getElementById('auth-password').value;
         try {
             await apiLogin(email, password);
-            const user = await apiGetCurrentUser();
+            const meData = await apiGetCurrentUser();
+            const user = unwrapCurrentUser(meData);
             state.currentUser = user;
             updateAuthDisplay(user);
             closeModal('modal-auth');
-            showToast(`Welcome back, ${user.full_name || user.email}!`);
+            showToast(`Welcome back, ${user.name || user.full_name || user.email}!`);
             if (state.currentMode === 'workspace') {
                 loadWorkspaceProjects();
             }
@@ -152,32 +184,38 @@ function setupAuthListeners() {
         }
     });
 
-    // Quick Demo Logins
-    btnQuickAdmin.addEventListener('click', async () => {
-        try {
-            await apiLogin('alex@agency.io', 'AgencyAdmin2026!');
-            const user = await apiGetCurrentUser();
-            state.currentUser = user;
-            updateAuthDisplay(user);
-            showToast('Authenticated as Tech Lead (Super Admin)');
-            loadWorkspaceProjects();
-        } catch (e) {
-            showToast('Quick login failed: ' + e.message, 'error');
-        }
-    });
+    // Quick Demo Logins (local development only)
+    if (btnQuickAdmin) {
+        btnQuickAdmin.addEventListener('click', async () => {
+            try {
+                await apiLogin('alex@agency.io', 'AgencyAdmin2026!');
+                const meData = await apiGetCurrentUser();
+                const user = unwrapCurrentUser(meData);
+                state.currentUser = user;
+                updateAuthDisplay(user);
+                showToast('Authenticated as Tech Lead (Super Admin)');
+                loadWorkspaceProjects();
+            } catch (e) {
+                showToast('Quick login failed: ' + e.message, 'error');
+            }
+        });
+    }
 
-    btnQuickDev.addEventListener('click', async () => {
-        try {
-            await apiLogin('sarah@agency.io', 'DeveloperPass123!');
-            const user = await apiGetCurrentUser();
-            state.currentUser = user;
-            updateAuthDisplay(user);
-            showToast('Authenticated as Senior Dev (Team Admin)');
-            loadWorkspaceProjects();
-        } catch (e) {
-            showToast('Quick login failed: ' + e.message, 'error');
-        }
-    });
+    if (btnQuickDev) {
+        btnQuickDev.addEventListener('click', async () => {
+            try {
+                await apiLogin('sarah@agency.io', 'DeveloperPass123!');
+                const meData = await apiGetCurrentUser();
+                const user = unwrapCurrentUser(meData);
+                state.currentUser = user;
+                updateAuthDisplay(user);
+                showToast('Authenticated as Senior Dev (Team Admin)');
+                loadWorkspaceProjects();
+            } catch (e) {
+                showToast('Quick login failed: ' + e.message, 'error');
+            }
+        });
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -196,11 +234,11 @@ async function loadStats() {
     try {
         const overview = await apiGetShowcaseStats();
         const stats = overview.metrics || overview;
-        document.getElementById('stat-projects').textContent = stats.active_projects ?? 0;
+        document.getElementById('stat-projects').textContent = stats.total_projects ?? stats.active_projects ?? 0;
         document.getElementById('stat-teams').textContent = stats.total_teams ?? 0;
-        document.getElementById('stat-members').textContent = stats.public_members ?? 0;
-        document.getElementById('stat-tasks').textContent = stats.open_tasks ?? 0;
-        document.getElementById('stat-techs').textContent = stats.technologies_count ?? 0;
+        document.getElementById('stat-members').textContent = stats.total_public_members ?? stats.public_members ?? 0;
+        document.getElementById('stat-tasks').textContent = (stats.featured_projects ? stats.featured_projects.length : (stats.open_tasks ?? 0));
+        document.getElementById('stat-techs').textContent = (stats.technologies ? stats.technologies.length : (stats.technologies_count ?? 0));
     } catch (err) {
         console.error('Failed to load showcase stats', err);
     }
@@ -267,7 +305,8 @@ async function loadShowcaseProjects(techSlug = '') {
                 .map(t => `<span class="tech-tag">${escapeHtml(t.name)}</span>`)
                 .join('');
 
-            const statusClass = project.status === 'ACTIVE' ? 'status-active' : project.status === 'PLANNING' ? 'status-planning' : 'status-completed';
+            const statusUpper = (project.status || 'active').toUpperCase();
+            const statusClass = statusUpper === 'ACTIVE' ? 'status-active' : statusUpper === 'PLANNING' ? 'status-planning' : 'status-completed';
             const projectName = project.title || project.name || 'Untitled System';
             const projectTeam = project.team_name || project.team?.name || 'Engineering Guild';
             const projectDesc = project.short_description || project.description || 'Production digital architecture.';
@@ -276,7 +315,7 @@ async function loadShowcaseProjects(techSlug = '') {
                 <div>
                     <div class="project-badge-row">
                         <span class="team-pill">${escapeHtml(projectTeam)}</span>
-                        <span class="status-pill ${statusClass}">${escapeHtml(project.status || 'ACTIVE')}</span>
+                        <span class="status-pill ${statusClass}">${escapeHtml(statusUpper)}</span>
                     </div>
                     <h3 class="project-title">${escapeHtml(projectName)}</h3>
                     <p class="project-desc">${escapeHtml(projectDesc)}</p>
@@ -496,14 +535,14 @@ function renderKanbanBoard(tasks) {
     clearKanbanColumns();
 
     const columnMap = {
-        'TODO': { container: document.getElementById('cards-container-todo'), count: document.getElementById('count-todo'), items: [] },
-        'IN_PROGRESS': { container: document.getElementById('cards-container-in-progress'), count: document.getElementById('count-in-progress'), items: [] },
-        'IN_REVIEW': { container: document.getElementById('cards-container-in-review'), count: document.getElementById('count-in-review'), items: [] },
-        'DONE': { container: document.getElementById('cards-container-done'), count: document.getElementById('count-done'), items: [] }
+        'todo': { container: document.getElementById('cards-container-todo'), count: document.getElementById('count-todo'), items: [] },
+        'in_progress': { container: document.getElementById('cards-container-in-progress'), count: document.getElementById('count-in-progress'), items: [] },
+        'in_review': { container: document.getElementById('cards-container-in-review'), count: document.getElementById('count-in-review'), items: [] },
+        'done': { container: document.getElementById('cards-container-done'), count: document.getElementById('count-done'), items: [] }
     };
 
     tasks.forEach(task => {
-        const status = task.status || 'TODO';
+        const status = (task.status || 'todo').toLowerCase();
         if (columnMap[status]) {
             columnMap[status].items.push(task);
         }
@@ -528,13 +567,14 @@ function createKanbanCardElement(task) {
     card.className = 'task-card';
     card.draggable = true;
     card.dataset.taskId = task.id;
-    card.dataset.status = task.status;
+    card.dataset.status = (task.status || 'todo').toLowerCase();
 
     const priorityClass = `priority-${(task.priority || 'medium').toLowerCase()}`;
+    const assigneeLabel = task.assignee_name || (task.assignee ? (task.assignee.name || task.assignee.full_name || task.assignee.email) : null) || 'Unassigned';
 
     card.innerHTML = `
         <div class="task-top-row">
-            <span class="priority-chip ${priorityClass}">${escapeHtml(task.priority || 'MEDIUM')}</span>
+            <span class="priority-chip ${priorityClass}">${escapeHtml((task.priority || 'medium').toUpperCase())}</span>
             <span style="font-size: 11px; color: var(--text-muted);">#${task.id}</span>
         </div>
         <div class="task-card-title">${escapeHtml(task.title)}</div>
@@ -543,7 +583,7 @@ function createKanbanCardElement(task) {
                 <span class="material-icons-round" style="font-size: 14px;">chat_bubble_outline</span>
                 <span>${task.comments ? task.comments.length : 0}</span>
             </span>
-            <span>${task.assignee ? escapeHtml(task.assignee.full_name || task.assignee.email) : 'Unassigned'}</span>
+            <span>${escapeHtml(assigneeLabel)}</span>
         </div>
     `;
 
@@ -591,17 +631,17 @@ function setupKanbanListeners() {
             e.preventDefault();
             col.classList.remove('drag-over');
 
-            const targetStatus = col.dataset.status;
+            const targetStatus = (col.dataset.status || 'todo').toLowerCase();
             const dataRaw = e.dataTransfer.getData('text/plain');
             if (!dataRaw) return;
 
             try {
                 const { taskId, currentStatus } = JSON.parse(dataRaw);
-                if (targetStatus === currentStatus) return;
+                if (targetStatus === (currentStatus || '').toLowerCase()) return;
 
                 // Fire move API call
                 await apiMoveTask(taskId, targetStatus, 0);
-                showToast(`Task #${taskId} moved to ${targetStatus}`);
+                showToast(`Task #${taskId} moved to ${targetStatus.toUpperCase()}`);
 
                 // Reload active project tasks
                 if (state.activeProjectId) {
@@ -702,13 +742,14 @@ async function openTaskDetailsModal(task) {
     
     const priBadge = document.getElementById('detail-priority-badge');
     priBadge.className = `priority-chip priority-${(task.priority || 'medium').toLowerCase()}`;
-    priBadge.textContent = task.priority || 'MEDIUM';
+    priBadge.textContent = (task.priority || 'medium').toUpperCase();
 
     const statBadge = document.getElementById('detail-status-badge');
-    statBadge.textContent = task.status || 'TODO';
+    statBadge.textContent = (task.status || 'todo').toUpperCase();
 
-    document.getElementById('detail-assignee').textContent = task.assignee ? (task.assignee.full_name || task.assignee.email) : 'Unassigned';
-    document.getElementById('detail-due-date').textContent = formatDate(task.due_date);
+    const assigneeLabel = task.assignee_name || (task.assignee ? (task.assignee.name || task.assignee.full_name || task.assignee.email) : null) || 'Unassigned';
+    document.getElementById('detail-assignee').textContent = assigneeLabel;
+    document.getElementById('detail-due-date').textContent = formatDate(task.deadline || task.due_date);
 
     openModal('modal-task-details');
     await reloadTaskComments(task.id);
@@ -731,8 +772,8 @@ async function reloadTaskComments(taskId) {
             const bubble = document.createElement('div');
             bubble.className = 'comment-bubble';
 
-            const authorName = c.author ? (c.author.full_name || c.author.email) : 'Team Member';
-            const isAuthor = state.currentUser && c.author_id === state.currentUser.id;
+            const authorName = c.author_name || (c.author ? (c.author.name || c.author.full_name || c.author.email) : null) || 'Team Member';
+            const isAuthor = state.currentUser && (c.author_id === state.currentUser.id || state.currentUser.is_super_admin);
 
             bubble.innerHTML = `
                 <div class="comment-author-row">
@@ -898,12 +939,15 @@ async function loadInquiriesTriage() {
                         <td style="padding: 10px;">${escapeHtml(inq.company_name || inq.company || '-')}</td>
                         <td style="padding: 10px;">${escapeHtml(inq.budget_range || inq.budget || '-')}</td>
                         <td style="padding: 10px;">
-                            <span class="status-pill ${inq.status === 'ACCEPTED' ? 'status-active' : inq.status === 'PENDING' ? 'status-planning' : 'status-completed'}">${escapeHtml(inq.status)}</span>
+                            <span class="status-pill ${inq.status === 'converted' || inq.status === 'responded' ? 'status-active' : inq.status === 'new' || inq.status === 'in_review' ? 'status-planning' : 'status-completed'}">${escapeHtml((inq.status || 'new').toUpperCase())}</span>
                         </td>
                         <td style="padding: 10px;">
-                            <div style="display: flex; gap: 6px;">
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'ACCEPTED')">Accept</button>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'DECLINED')">Decline</button>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'in_review')">Review</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'responded')">Responded</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'converted')">Convert</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'closed')">Close</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="handleTriageStatus(${inq.id}, 'spam')">Spam</button>
                             </div>
                         </td>
                     </tr>

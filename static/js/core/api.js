@@ -6,16 +6,44 @@
 
 const API_BASE = '/api/v1';
 
-let isRefreshing = false;
-let refreshSubscribers = [];
+let refreshPromise = null;
 
-function subscribeTokenRefresh(cb) {
-    refreshSubscribers.push(cb);
-}
+async function performSilentRefresh() {
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+    refreshPromise = (async () => {
+        try {
+            const storedRefresh = localStorage.getItem('refresh_token');
+            const refreshPayload = storedRefresh ? JSON.stringify({ refresh_token: storedRefresh }) : undefined;
+            const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: refreshPayload,
+                credentials: 'same-origin',
+            });
 
-function onRefreshed(token) {
-    refreshSubscribers.forEach(cb => cb(token));
-    refreshSubscribers = [];
+            if (refreshRes.ok) {
+                const refreshJson = await refreshRes.json();
+                const tokenData = refreshJson.data || refreshJson;
+                if (tokenData && tokenData.access_token) {
+                    localStorage.setItem('access_token', tokenData.access_token);
+                    if (tokenData.refresh_token) {
+                        localStorage.setItem('refresh_token', tokenData.refresh_token);
+                    }
+                    return tokenData.access_token;
+                }
+            }
+            throw new Error('Refresh token invalid or expired');
+        } catch (err) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            throw err;
+        } finally {
+            refreshPromise = null;
+        }
+    })();
+    return refreshPromise;
 }
 
 /**
@@ -46,50 +74,13 @@ async function apiCall(endpoint, options = {}) {
         // Intercept 401 Unauthorized for silent rotational refresh
         const isAuthRoute = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh');
         if (response.status === 401 && !options._retry && !isAuthRoute) {
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    subscribeTokenRefresh((newToken) => {
-                        apiCall(endpoint, { ...options, _retry: true })
-                            .then(resolve)
-                            .catch(reject);
-                    });
-                });
-            }
-
             options._retry = true;
-            isRefreshing = true;
-
             try {
-                const storedRefresh = localStorage.getItem('refresh_token');
-                const refreshPayload = storedRefresh ? JSON.stringify({ refresh_token: storedRefresh }) : undefined;
-                const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: refreshPayload,
-                    credentials: 'same-origin',
-                });
-
-                if (refreshRes.ok) {
-                    const refreshJson = await refreshRes.json();
-                    const tokenData = refreshJson.data || refreshJson;
-                    if (tokenData && tokenData.access_token) {
-                        localStorage.setItem('access_token', tokenData.access_token);
-                        if (tokenData.refresh_token) {
-                            localStorage.setItem('refresh_token', tokenData.refresh_token);
-                        }
-                        isRefreshing = false;
-                        onRefreshed(tokenData.access_token);
-                        return await apiCall(endpoint, options);
-                    }
-                }
+                await performSilentRefresh();
+                return await apiCall(endpoint, options);
             } catch (refreshErr) {
                 console.warn('Silent token refresh failed:', refreshErr);
             }
-
-            isRefreshing = false;
-            refreshSubscribers = [];
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
         }
 
         const json = await response.json().catch(() => null);
@@ -225,6 +216,10 @@ async function apiGetProjectTasks(projectId) {
     return res.items || res;
 }
 
+async function apiGetProjectKanban(projectId) {
+    return await apiCall(`/projects/${projectId}/tasks/kanban`);
+}
+
 async function apiMoveTask(taskId, status, position) {
     return await apiCall(`/tasks/${taskId}/move`, {
         method: 'PATCH',
@@ -266,9 +261,13 @@ async function apiGetInquiries() {
     return res.items || res;
 }
 
-async function apiUpdateInquiryStatus(inquiryId, status) {
-    return await apiCall(`/inquiries/${inquiryId}/status`, {
+async function apiUpdateInquiryStatus(inquiryId, status, adminNotes = null) {
+    const body = { status };
+    if (adminNotes !== null) {
+        body.admin_notes = adminNotes;
+    }
+    return await apiCall(`/inquiries/${inquiryId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status })
+        body: JSON.stringify(body)
     });
 }

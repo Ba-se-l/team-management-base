@@ -98,3 +98,40 @@ class TeamRepository(BaseRepository[Team]):
         members_count = await self.session.scalar(members_stmt) or 0
         projects_count = await self.session.scalar(projects_stmt) or 0
         return members_count, projects_count
+
+    async def get_batch_team_metrics(self, team_ids: list[int]) -> dict[int, tuple[int, int]]:
+        """Computes (members_count, projects_count) for a batch of teams in two GROUP BY queries.
+
+        Args:
+            team_ids: List of team primary keys.
+
+        Returns:
+            Mapping of team_id -> (members_count, projects_count).
+        """
+        if not team_ids:
+            return {}
+
+        members_stmt = (
+            select(TeamMember.team_id, func.count(TeamMember.member_id))
+            .where(
+                TeamMember.team_id.in_(team_ids),
+                TeamMember.is_active.is_(True),
+            )
+            .group_by(TeamMember.team_id)
+        )
+        projects_stmt = (
+            select(Project.team_id, func.count(Project.id))
+            .where(
+                Project.team_id.in_(team_ids),
+                Project.is_active.is_(True),
+            )
+            .group_by(Project.team_id)
+        )
+
+        members_rows = dict((await self.session.execute(members_stmt)).all())
+        projects_rows = dict((await self.session.execute(projects_stmt)).all())
+
+        return {
+            tid: (int(members_rows.get(tid, 0)), int(projects_rows.get(tid, 0)))
+            for tid in team_ids
+        }

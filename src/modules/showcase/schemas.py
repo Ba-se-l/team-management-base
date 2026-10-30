@@ -1,7 +1,7 @@
 """Public showcase request and response schemas strictly isolating public presentation data."""
 
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from src.database.enums import ProjectStatus, TechnologyCategory
 
@@ -21,16 +21,20 @@ class PublicTechnologySummary(BaseModel):
 class PublicMember(BaseModel):
     """Public profile representation for opt-in agency developers."""
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
     name: str
     username: str
     avatar_url: str | None = None
     job_title: str | None = None
+    bio: str | None = None
     github_url: str | None = None
     linkedin_url: str | None = None
-    portfolio_url: str | None = None
+    portfolio_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("portfolio_url", "website_url"),
+    )
 
 
 class PublicProjectCard(BaseModel):

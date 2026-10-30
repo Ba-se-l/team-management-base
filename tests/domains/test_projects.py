@@ -196,18 +196,18 @@ async def test_update_project_and_filters(
     assert proj_resp.status_code == 201
     proj_id = proj_resp.json()["id"]
 
-    # Update project to ACTIVE and PUBLIC
+    # Update project to ACTIVE and PENDING_REVIEW (Team Admin can request review; Super Admin publishes)
     patch_resp = await client.patch(
         f"/api/v1/projects/{proj_id}",
         json={
             "status": ProjectStatus.ACTIVE.value,
-            "visibility": ProjectVisibility.PUBLIC.value,
+            "visibility": ProjectVisibility.PENDING_REVIEW.value,
         },
         headers=headers,
     )
     assert patch_resp.status_code == 200
     assert patch_resp.json()["status"] == ProjectStatus.ACTIVE.value
-    assert patch_resp.json()["visibility"] == ProjectVisibility.PUBLIC.value
+    assert patch_resp.json()["visibility"] == ProjectVisibility.PENDING_REVIEW.value
 
     # Filter team projects by status=active
     filter_resp = await client.get(

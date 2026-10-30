@@ -1,13 +1,18 @@
 """Team member domain service orchestrating memberships, role updates, and orphan protection."""
 
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.database.enums import TeamRole
+from src.database.enums import TaskStatus, TeamRole
 from src.exc import BusinessRuleViolationException, NotFoundException
+from src.modules.project.models import Project
+from src.modules.task.models import Task
 from src.modules.team.repository import TeamRepository
 from src.modules.user.models import User
 from src.modules.user.repository import UserRepository
+from src.share.event_bus import event_bus
 from src.share.responses import PageResult
+from src.share.schemas import AuditEvent
 from .models import TeamMember
 from .repository import TeamMemberRepository
 from .schemas import AddMemberRequest, MemberResponse, UpdateMemberRoleRequest
@@ -140,6 +145,15 @@ async def update_member_role(
 
     user_repo = UserRepository(session=session)
     user = await user_repo.get_by_id(user_id)
+    await event_bus.publish(
+        AuditEvent(
+            action="TEAM_MEMBER_ROLE_CHANGED",
+            entity_type="TeamMember",
+            entity_id=f"{team_id}:{user_id}",
+            changes_payload={"new_role": schema.role.value},
+        ),
+        session=session,
+    )
     return _build_member_response(membership, user)
 
 
@@ -148,7 +162,7 @@ async def remove_member(
     user_id: int,
     session: AsyncSession,
 ) -> None:
-    """Removes a member from a team with sole administrator protection.
+    """Removes a member from a team with sole administrator protection and unassigns open tasks.
 
     Args:
         team_id: Target team integer ID.
@@ -182,6 +196,29 @@ async def remove_member(
             message="Cannot remove the sole team leader.",
             error_code="LAST_ADMIN_CANNOT_BE_REMOVED",
         )
+
+    # Unassign open (non-DONE) tasks belonging to this team's projects
+    project_ids_subq = select(Project.id).where(Project.team_id == team_id)
+    unassign_stmt = (
+        update(Task)
+        .where(
+            Task.project_id.in_(project_ids_subq),
+            Task.assignee_to_id == user_id,
+            Task.status != TaskStatus.DONE,
+        )
+        .values(assignee_to_id=None)
+    )
+    await session.execute(unassign_stmt)
+    await session.flush()
+
+    await event_bus.publish(
+        AuditEvent(
+            action="TEAM_MEMBER_REMOVED",
+            entity_type="TeamMember",
+            entity_id=f"{team_id}:{user_id}",
+        ),
+        session=session,
+    )
 
 
 async def list_team_members(

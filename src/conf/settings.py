@@ -1,9 +1,25 @@
 """Application settings and environment configuration loaded via Pydantic Settings."""
 
-import secrets
 from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEV_DEFAULT_SECRET = "dev-only-insecure-access-secret-key-do-not-use-in-prod-32b"
+_DEV_DEFAULT_REFRESH_SECRET = "dev-only-insecure-refresh-secret-key-do-not-use-in-prod-32b"
+_FORBIDDEN_PROD_PATTERNS: tuple[str, ...] = (
+    "secret-key-in-production-time-in-this-place",
+    "refresh-secret-key-in-production-time-in-this-place",
+    "dev-secret-key-change-in-production",
+    "dev-refresh-secret-key-change-in-production",
+    "f3a9c8e7b1d204968574635241a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2",
+    "your-super-secret-jwt-key",
+    "your-different-super-secret",
+    "change-in-production",
+    "change_me",
+    "changeme",
+    "dev-only-insecure",
+    "placeholder",
+)
 
 
 class EnvSettings(BaseSettings):
@@ -33,8 +49,8 @@ class EnvSettings(BaseSettings):
     POOL_PRE_PING: bool = True
 
     # Security & Tokens
-    SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
-    REFRESH_SECRET_KEY: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    SECRET_KEY: str = Field(default=_DEV_DEFAULT_SECRET)
+    REFRESH_SECRET_KEY: str = Field(default=_DEV_DEFAULT_REFRESH_SECRET)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
@@ -56,18 +72,26 @@ class EnvSettings(BaseSettings):
     @model_validator(mode="after")
     def _validate_settings(self) -> "EnvSettings":
         """Enforces production safety invariants and environment defaults."""
+        for field_name in ("SECRET_KEY", "REFRESH_SECRET_KEY"):
+            val: str = getattr(self, field_name, "")
+            if not val or len(val.strip()) < 32:
+                raise ValueError(
+                    f"FATAL: {field_name} must be at least 32 characters long."
+                )
+
+        if self.SECRET_KEY == self.REFRESH_SECRET_KEY:
+            raise ValueError(
+                "FATAL: SECRET_KEY and REFRESH_SECRET_KEY must be cryptographically distinct."
+            )
+
         if self.ENVIRONMENT == "prod":
             self.REFRESH_COOKIE_SECURE = True
 
-            placeholders = {
-                "SECRET_KEY": "secret-key-in-production-time-in-this-place",
-                "REFRESH_SECRET_KEY": "refresh-secret-key-in-production-time-in-this-place",
-            }
-            for field_name, placeholder in placeholders.items():
-                val: str = getattr(self, field_name)
-                if not val or val.startswith(placeholder):
+            for field_name in ("SECRET_KEY", "REFRESH_SECRET_KEY"):
+                val_lower = getattr(self, field_name).lower()
+                if any(pattern in val_lower for pattern in _FORBIDDEN_PROD_PATTERNS):
                     raise ValueError(
-                        f"FATAL: {field_name} contains an insecure default placeholder or is empty. "
+                        f"FATAL: {field_name} contains an insecure default or example placeholder. "
                         "A cryptographically strong secret must be set in `.env` for production."
                     )
 

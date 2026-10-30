@@ -16,8 +16,10 @@ from src.security import (
     create_access_token,
     create_refresh_token,
     decode_refresh_token,
-    verify_password,
+    verify_password_async,
 )
+from src.share.event_bus import event_bus
+from src.share.schemas import AuditEvent
 from .model import RefreshSession
 from .repo import RefreshSessionRepository
 from .schemas import (
@@ -100,17 +102,27 @@ async def login_user(
     user_repo = UserRepository(session=session)
     user = await user_repo.get_by_email(schema.email)
 
-    if user is None or not verify_password(schema.password, user.hashed_password):
+    if user is None or not await verify_password_async(schema.password, user.hashed_password):
         raise InvalidCredentialsException("Invalid email or password.")
 
     if not user.is_active:
         raise UserInactiveException(identifier=str(user.id))
 
-    return await _issue_tokens(
+    tokens = await _issue_tokens(
         user=user,
         session=session,
         device_info=device_info,
     )
+    await event_bus.publish(
+        AuditEvent(
+            action="USER_LOGIN",
+            entity_type="User",
+            entity_id=str(user.id),
+            user_id=user.id,
+        ),
+        session=session,
+    )
+    return tokens
 
 
 async def refresh_token(
@@ -118,7 +130,7 @@ async def refresh_token(
     session: AsyncSession,
     device_info: str | None = None,
 ) -> tuple[TokenResponse, str]:
-    """Exchanges a valid refresh token for a new pair with reuse attack detection.
+    """Exchanges a valid refresh token for a new pair with atomic reuse attack detection.
 
     Args:
         refresh_token_str: Raw JWT refresh token string.
@@ -135,6 +147,7 @@ async def refresh_token(
     payload = decode_refresh_token(refresh_token_str)
     user_id = int(payload["sub"])
     jti = payload["jti"]
+    token_fid = payload.get("fid")
     token_sec_ver = payload.get("sec_ver")
 
     refresh_repo = RefreshSessionRepository(session=session)
@@ -143,8 +156,27 @@ async def refresh_token(
     if existing_session is None:
         raise TokenRevokedException("Refresh token session was not found.")
 
-    # Token Reuse Attack Detection: if already revoked, compromise detected!
-    if existing_session.is_revoked:
+    if existing_session.user_id != user_id or (
+        token_fid is not None and existing_session.family_id != token_fid
+    ):
+        if existing_session.family_id:
+            await refresh_repo.revoke_family(existing_session.family_id)
+        await session.commit()
+        raise InvalidCredentialsException("Refresh token claim mismatch.")
+
+    # Check expiration before consumption
+    expires_at = existing_session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if not existing_session.is_revoked and expires_at < datetime.now(timezone.utc):
+        await refresh_repo.revoke_by_jti(jti=jti)
+        await session.commit()
+        raise TokenRevokedException("Refresh token has expired.")
+
+    # Atomic compare-and-swap consumption: prevents TOCTOU race and detects replay attacks
+    consumed = await refresh_repo.consume_session_atomically(jti=jti)
+    if not consumed:
         if existing_session.family_id:
             await refresh_repo.revoke_family(existing_session.family_id)
         else:
@@ -154,21 +186,12 @@ async def refresh_token(
             "Revoked refresh token replay detected. All sessions in this lineage have been terminated."
         )
 
-    # Check expiration
-    expires_at = existing_session.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-    if expires_at < datetime.now(timezone.utc):
-        await refresh_repo.revoke_by_jti(jti=jti)
-        await session.flush()
-        raise TokenRevokedException("Refresh token has expired.")
-
     # Verify user state & security version
     user_repo = UserRepository(session=session)
     user = await user_repo.get_by_id(user_id)
 
     if user is None or not user.is_active:
+        await session.commit()
         raise InvalidCredentialsException("User account is inactive or not found.")
 
     if token_sec_ver is not None and user.security_version != token_sec_ver:
@@ -176,11 +199,8 @@ async def refresh_token(
             await refresh_repo.revoke_family(existing_session.family_id)
         else:
             await refresh_repo.revoke_all_for_user(user_id=user_id)
-        await session.flush()
+        await session.commit()
         raise InvalidCredentialsException("Credentials have been rotated. Please log in again.")
-
-    # Rotate token: revoke old token and create new session in same family
-    await refresh_repo.revoke_by_jti(jti=jti)
 
     return await _issue_tokens(
         user=user,
@@ -210,12 +230,17 @@ async def logout(refresh_token_str: str, session: AsyncSession) -> None:
 
 
 async def logout_all(user_id: int, session: AsyncSession) -> None:
-    """Revokes all active refresh token sessions for the given user.
+    """Revokes all active refresh token sessions and invalidates active access tokens for the user.
 
     Args:
         user_id: Target user integer primary key.
         session: Active asynchronous database session.
     """
+    user_repo = UserRepository(session=session)
+    user = await user_repo.get_by_id(user_id)
+    if user is not None:
+        user.security_version = (user.security_version or 1) + 1
+
     refresh_repo = RefreshSessionRepository(session=session)
     await refresh_repo.revoke_all_for_user(user_id=user_id)
     await session.flush()

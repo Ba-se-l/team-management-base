@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+import sqlalchemy as sa
 from sqlalchemy import Boolean, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,7 +45,9 @@ class User(Base, CreatedAtUpdatedAtMixin):
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    is_public_member: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_public_member: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.false(), nullable=False
+    )
 
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

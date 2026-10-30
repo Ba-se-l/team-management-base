@@ -54,7 +54,7 @@ async def submit_inquiry(
     repo = InquiryRepository(session=session)
     inquiry = ServiceInquiry(
         client_name=schema.client_name,
-        client_email=str(schema.client_email),
+        client_email=str(schema.client_email).strip().lower(),
         company_name=schema.company_name,
         service_type=schema.service_type,
         budget_range=schema.budget_range,
@@ -142,6 +142,7 @@ async def update_inquiry_status(
     inquiry_id: int,
     schema: UpdateInquiryStatusRequest,
     session: AsyncSession,
+    actor_id: int | None = None,
 ) -> InquiryResponse:
     """Updates an inquiry's status and records administrative notes.
 
@@ -149,6 +150,7 @@ async def update_inquiry_status(
         inquiry_id: Target inquiry ID.
         schema: Status update request.
         session: Active asynchronous database session.
+        actor_id: Optional acting administrator ID.
 
     Returns:
         Updated InquiryResponse.
@@ -161,6 +163,22 @@ async def update_inquiry_status(
     if inquiry is None:
         raise NotFoundException(entity="ServiceInquiry", identifier=inquiry_id)
 
-    update_dict = {"status": schema.status}
+    update_dict: dict[str, object] = {"status": schema.status}
+    if "admin_notes" in schema.model_fields_set:
+        update_dict["admin_notes"] = schema.admin_notes
     inquiry = await repo.update(inquiry, update_dict)
+
+    await event_bus.publish(
+        AuditEvent(
+            action="INQUIRY_STATUS_UPDATED",
+            entity_type="Inquiry",
+            entity_id=str(inquiry.id),
+            user_id=actor_id,
+            changes_payload={
+                "status": schema.status.value,
+                "admin_notes": schema.admin_notes,
+            },
+        ),
+        session=session,
+    )
     return InquiryResponse.model_validate(inquiry)

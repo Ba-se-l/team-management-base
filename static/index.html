@@ -220,7 +220,7 @@
             </div>
 
             <!-- Demo Authentication Profiles -->
-            <div>
+            <div id="demo-profiles-container" style="display: none;">
                 <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 12px; padding-left: 8px;">
                     FAST DEMO PROFILES
                 </div>
@@ -262,8 +262,8 @@
 
                 <!-- 4 Columns Kanban Layout -->
                 <div class="kanban-board" id="kanban-board-container">
-                    <!-- Column 1: TODO -->
-                    <div class="kanban-column" data-status="TODO" id="kanban-col-todo">
+                    <!-- Column 1: todo -->
+                    <div class="kanban-column" data-status="todo" id="kanban-col-todo">
                         <div class="column-header">
                             <div class="column-title">
                                 <span class="material-icons-round" style="font-size: 18px; color: var(--text-muted);">radio_button_unchecked</span>
@@ -274,8 +274,8 @@
                         <div class="column-cards-container" id="cards-container-todo"></div>
                     </div>
 
-                    <!-- Column 2: IN_PROGRESS -->
-                    <div class="kanban-column" data-status="IN_PROGRESS" id="kanban-col-in-progress">
+                    <!-- Column 2: in_progress -->
+                    <div class="kanban-column" data-status="in_progress" id="kanban-col-in-progress">
                         <div class="column-header">
                             <div class="column-title">
                                 <span class="material-icons-round" style="font-size: 18px; color: var(--accent-cyan);">trending_up</span>
@@ -286,8 +286,8 @@
                         <div class="column-cards-container" id="cards-container-in-progress"></div>
                     </div>
 
-                    <!-- Column 3: IN_REVIEW -->
-                    <div class="kanban-column" data-status="IN_REVIEW" id="kanban-col-in-review">
+                    <!-- Column 3: in_review -->
+                    <div class="kanban-column" data-status="in_review" id="kanban-col-in-review">
                         <div class="column-header">
                             <div class="column-title">
                                 <span class="material-icons-round" style="font-size: 18px; color: var(--accent-amber);">rate_review</span>
@@ -298,8 +298,8 @@
                         <div class="column-cards-container" id="cards-container-in-review"></div>
                     </div>
 
-                    <!-- Column 4: DONE -->
-                    <div class="kanban-column" data-status="DONE" id="kanban-col-done">
+                    <!-- Column 4: done -->
+                    <div class="kanban-column" data-status="done" id="kanban-col-done">
                         <div class="column-header">
                             <div class="column-title">
                                 <span class="material-icons-round" style="font-size: 18px; color: var(--accent-emerald);">check_circle</span>
@@ -418,19 +418,19 @@
                     <div class="form-group">
                         <label for="create-task-priority">Priority</label>
                         <select id="create-task-priority" class="form-select">
-                            <option value="MEDIUM" selected>MEDIUM</option>
-                            <option value="LOW">LOW</option>
-                            <option value="HIGH">HIGH</option>
-                            <option value="CRITICAL">CRITICAL</option>
+                            <option value="medium" selected>MEDIUM</option>
+                            <option value="low">LOW</option>
+                            <option value="high">HIGH</option>
+                            <option value="critical">CRITICAL</option>
                         </select>
                     </div>
                     <div class="form-group">
                         <label for="create-task-status">Initial Status</label>
                         <select id="create-task-status" class="form-select">
-                            <option value="TODO" selected>To Do</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="IN_REVIEW">In Review</option>
-                            <option value="DONE">Done</option>
+                            <option value="todo" selected>To Do</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="in_review">In Review</option>
+                            <option value="done">Done</option>
                         </select>
                     </div>
                 </div>

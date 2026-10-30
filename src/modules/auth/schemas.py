@@ -8,7 +8,7 @@ class LoginRequest(BaseModel):
     """Schema for user login credentials."""
 
     email: EmailStr = Field()
-    password: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=128)
 
     @field_validator("email", mode="after")
     @classmethod

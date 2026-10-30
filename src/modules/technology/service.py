@@ -8,7 +8,8 @@ via a many-to-many relationship.
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Sequence
 
-from src.exc import AlreadyExistsException
+from src.exc import AlreadyExistsException, BusinessRuleViolationException
+from src.share.helpers import slugify
 from .models import Technology
 from .schemas import CreateTechnologyRequest, UpdateTechnologyRequest
 from .repository import TechnologyRepository
@@ -60,16 +61,30 @@ async def create_technology(
     """
     repo = TechnologyRepository(session=session)
 
-    # Step 1: Check uniqueness
+    # Step 1: Check uniqueness by name and normalized slug
     is_exist = await repo.check_if_exist(name=schema.name)
     if is_exist:
         raise AlreadyExistsException(entity="Technology", field="name", value=schema.name)
 
+    slug = slugify(schema.name, fallback="")
+    if not slug:
+        raise BusinessRuleViolationException(
+            "Technology name must contain valid alphanumeric or technical symbol characters.",
+            error_code="INVALID_TECHNOLOGY_NAME",
+        )
+
+    existing_slug = await repo.get_by_slug(slug=slug)
+    if existing_slug is not None:
+        raise AlreadyExistsException(entity="Technology", field="slug", value=slug)
+
     # Step 2: Build ORM model
     tech = Technology(
         name=schema.name,
+        slug=slug,
+        category=schema.category,
         description=schema.description,
         documentation_url=schema.documentation_url,
+        icon_url=schema.icon_url,
     )
 
     # Step 3: Persist
@@ -106,17 +121,28 @@ async def update_technology(
     # Step 1: Fetch
     tech = await get_technology(tech_id=tech_id, session=session)
 
-    # Step 2: If name is changing, check uniqueness
+    # Step 2: If name is changing, check uniqueness of name and slug
+    update_data = schema.model_dump(exclude_unset=True)
     if schema.name is not None and schema.name != tech.name:
         is_exist = await repo.check_if_exist(name=schema.name)
         if is_exist:
             raise AlreadyExistsException(entity="Technology", field="name", value=schema.name)
 
+        new_slug = slugify(schema.name, fallback="")
+        if not new_slug:
+            raise BusinessRuleViolationException(
+                "Technology name must contain valid alphanumeric or technical symbol characters.",
+                error_code="INVALID_TECHNOLOGY_NAME",
+            )
+        existing_slug = await repo.get_by_slug(slug=new_slug)
+        if existing_slug is not None and existing_slug.id != tech.id:
+            raise AlreadyExistsException(entity="Technology", field="slug", value=new_slug)
+        update_data["slug"] = new_slug
 
     # Step 3: Apply update
     updated_tech = await repo.update(
         instance=tech,
-        update_data=schema.model_dump(exclude_unset=True),
+        update_data=update_data,
     )
 
     return updated_tech

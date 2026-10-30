@@ -118,17 +118,18 @@ async def _resolve_team_id_from_request(
         except (ValueError, TypeError):
             raise ForbiddenException("Invalid task identifier format.", error_code="INVALID_TASK_ID")
         stmt = (
-            select(Task, Project.team_id)
+            select(Task, Project)
             .join(Project, Task.project_id == Project.id)
             .where(Task.id == task_id)
         )
         row = (await session.execute(stmt)).first()
         if row is None:
             raise NotFoundException(entity="Task", identifier=task_id)
-        task_obj, team_id = row
+        task_obj, project_obj = row
         request.state.target_task = task_obj
-        request.state.team_id = int(team_id)
-        return int(team_id)
+        request.state.target_project = project_obj
+        request.state.team_id = int(project_obj.team_id)
+        return int(project_obj.team_id)
 
     # 4. Indirect via comment in path
     if "comment_id" in path_params:
@@ -137,16 +138,17 @@ async def _resolve_team_id_from_request(
         except (ValueError, TypeError):
             raise ForbiddenException("Invalid comment identifier format.", error_code="INVALID_COMMENT_ID")
         stmt = (
-            select(Project.team_id)
+            select(Project)
             .join(Task, Task.project_id == Project.id)
             .join(TaskComment, TaskComment.task_id == Task.id)
             .where(TaskComment.id == cid)
         )
-        team_id = await session.scalar(stmt)
-        if team_id is None:
+        project_obj = await session.scalar(stmt)
+        if project_obj is None:
             raise NotFoundException(entity="TaskComment", identifier=cid)
-        request.state.team_id = int(team_id)
-        return int(team_id)
+        request.state.target_project = project_obj
+        request.state.team_id = int(project_obj.team_id)
+        return int(project_obj.team_id)
 
     raise ForbiddenException(
         message="Cannot determine team workspace context for request.",
@@ -170,16 +172,23 @@ def require_team_permission(
 
     async def _guard(
         request: Request,
-        session: AsyncSession = Depends(get_session),
+        session: AsyncSession = Depends(get_session, scope="function"),
         current_user: User = Depends(get_current_user),
     ) -> User:
         # Super administrators bypass all workspace permission constraints
         if current_user.is_super_admin:
             return current_user
 
+        from src.database.enums import TeamRole
+        from src.exc import InactiveEntityException
+        from src.modules.team.models import Team
         from src.modules.team_members.models import TeamMember
 
         team_id = await _resolve_team_id_from_request(request, session)
+
+        team = await session.get(Team, team_id)
+        if team is None:
+            raise NotFoundException(entity="Team", identifier=team_id)
 
         # Retrieve user's scoped role within this team
         stmt = select(TeamMember).where(
@@ -193,6 +202,17 @@ def require_team_permission(
                 message="You are not a member of this team workspace.",
                 error_code="TEAM_MEMBERSHIP_REQUIRED",
             )
+
+        # Enforce active team state for non-super-admins (allow Team Admin to update/reactivate team)
+        if not team.is_active:
+            if not (obj == "team" and act == "update" and membership.role == TeamRole.ADMIN):
+                raise InactiveEntityException(entity="Team", identifier=team_id)
+
+        # Enforce active project state when route targets a specific project or child resource
+        target_project = getattr(request.state, "target_project", None)
+        if target_project is not None and not target_project.is_active:
+            if not (obj == "project" and act == "update" and membership.role == TeamRole.ADMIN):
+                raise InactiveEntityException(entity="Project", identifier=target_project.id)
 
         # Evaluate Casbin policy matrix for the member's role
         permitted = await check_permission(

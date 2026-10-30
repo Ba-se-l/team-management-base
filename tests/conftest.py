@@ -5,8 +5,10 @@ and test isolation teardowns.
 """
 
 from collections.abc import AsyncGenerator
+from typing import Any
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
@@ -14,7 +16,8 @@ from src.database.base import Base
 from src.database.session import get_session
 from src.main import app
 from src.modules.audit.service import register_audit_subscribers
-from src.security.authorization import reset_casbin_enforcer
+from src.security.authorization import configure_casbin_engine, reset_casbin_enforcer
+from src.security.casbin_rule import CasbinRule
 from src.share.event_bus import event_bus
 from src.share.rate_limit import RateLimiter
 
@@ -26,6 +29,14 @@ test_async_engine = create_async_engine(
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
+
+
+@event.listens_for(test_async_engine.sync_engine, "connect")
+def _set_test_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 
 TestingSessionLocal = async_sessionmaker(
     bind=test_async_engine,
@@ -43,18 +54,22 @@ async def setup_test_database() -> AsyncGenerator[None, None]:
 
     RateLimiter.reset_all()
     register_audit_subscribers()
+    configure_casbin_engine(test_async_engine)
     await reset_casbin_enforcer()
 
     async with test_async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(CasbinRule.metadata.create_all)
 
     yield
 
     async with test_async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(CasbinRule.metadata.drop_all)
 
     RateLimiter.reset_all()
     await event_bus.clear()
+    configure_casbin_engine(None)
     await reset_casbin_enforcer()
 
 

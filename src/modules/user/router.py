@@ -32,7 +32,11 @@ async def create_user(
     session: SessionDep,
 ) -> UserResponse:
     """Provisions a new developer or administrator account. Restricted to super admins."""
-    user = await service.create_user(schema=request, session=session)
+    user = await service.create_user(
+        schema=request,
+        session=session,
+        actor_id=current_admin.id,
+    )
     return UserResponse.model_validate(user)
 
 
@@ -128,5 +132,10 @@ async def list_users(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[UserResponse]:
     """Retrieves a paginated list of all active users in the system."""
-    users = await service.list_users(skip=skip, limit=limit, session=session)
+    users = await service.list_users(
+        skip=skip,
+        limit=limit,
+        session=session,
+        current_user=current_user,
+    )
     return [UserResponse.model_validate(u) for u in users]

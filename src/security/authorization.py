@@ -2,6 +2,8 @@ import asyncio
 from pathlib import Path
 import casbin
 from casbin_async_sqlalchemy_adapter import Adapter
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from src.database.engine import async_engine
 from src.database.enums import TeamRole
@@ -11,6 +13,18 @@ _MODEL_PATH = Path(__file__).parent / "rbac_model.conf"
 
 _enforcer: casbin.AsyncEnforcer | None = None
 _enforcer_lock = asyncio.Lock()
+_custom_engine: AsyncEngine | None = None
+
+
+def configure_casbin_engine(engine: AsyncEngine | None) -> None:
+    """Configures a custom SQLAlchemy AsyncEngine for Casbin (e.g. in isolated test runs).
+
+    Args:
+        engine: The SQLAlchemy AsyncEngine to bind Casbin rules to, or None to reset.
+    """
+    global _custom_engine, _enforcer
+    _custom_engine = engine
+    _enforcer = None
 
 
 async def reset_casbin_enforcer() -> None:
@@ -30,12 +44,26 @@ async def get_casbin_enforcer() -> casbin.AsyncEnforcer:
     if _enforcer is None:
         async with _enforcer_lock:
             if _enforcer is None:
-                adapter = Adapter(async_engine, CasbinRule)
+                target_engine = _custom_engine or async_engine
+                adapter = Adapter(target_engine, CasbinRule)
                 enf = casbin.AsyncEnforcer(str(_MODEL_PATH), adapter)
                 await enf.load_policy()
-                await init_default_casbin_policies(enf)
+                if not enf.get_policy():
+                    await init_default_casbin_policies(enf)
                 _enforcer = enf
     return _enforcer
+
+
+async def reset_casbin_policies() -> None:
+    """Clears persisted Casbin rules in database storage and re-seeds default V1 policies."""
+    target_engine = _custom_engine or async_engine
+    async with target_engine.begin() as conn:
+        await conn.execute(delete(CasbinRule))
+
+    await reset_casbin_enforcer()
+    enf = await get_casbin_enforcer()
+    enf.clear_policy()
+    await init_default_casbin_policies(enf)
 
 
 async def init_default_casbin_policies(enforcer: casbin.AsyncEnforcer) -> None:

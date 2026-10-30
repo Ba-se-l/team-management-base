@@ -18,7 +18,7 @@ async def setup_tech_env(db_session: AsyncSession) -> dict[str, object]:
         email="curator@agency.io",
         hashed_password=hash_password("CuratorPass123!"),
         is_active=True,
-        is_super_admin=False,
+        is_super_admin=True,
         status=UserStatus.ONLINE,
     )
     db_session.add(user)

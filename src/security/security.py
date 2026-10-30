@@ -5,6 +5,7 @@ from typing import Any
 import uuid
 import jwt
 from pwdlib import PasswordHash
+from starlette.concurrency import run_in_threadpool
 
 from src.conf import settings
 from src.exc import InvalidCredentialsException
@@ -25,6 +26,11 @@ def hash_password(plain_password: str) -> str:
     return _password_hasher.hash(plain_password)
 
 
+async def hash_password_async(plain_password: str) -> str:
+    """Asynchronously hashes a plain-text password in a worker thread to avoid blocking the event loop."""
+    return await run_in_threadpool(hash_password, plain_password)
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifies a plain-text password against an Argon2id hash.
 
@@ -39,6 +45,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return _password_hasher.verify(plain_password, hashed_password)
     except Exception:
         return False
+
+
+async def verify_password_async(plain_password: str, hashed_password: str) -> bool:
+    """Asynchronously verifies a plain-text password in a worker thread to avoid blocking the event loop."""
+    return await run_in_threadpool(verify_password, plain_password, hashed_password)
 
 
 def create_access_token(
@@ -64,6 +75,7 @@ def create_access_token(
         "sub": str(user_id),
         "type": TokenType.ACCESS.value,
         "sec_ver": security_version,
+        "jti": uuid.uuid4().hex,
         "iat": int(now.timestamp()),
         "exp": int((now + expires_delta).timestamp()),
     }
@@ -131,10 +143,16 @@ def decode_access_token(token: str) -> dict[str, Any]:
             token,
             key=settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
+            options={"require": ["sub", "exp", "iat", "type", "sec_ver"]},
         )
 
         if "sub" not in payload or payload.get("type") != TokenType.ACCESS.value:
             raise InvalidCredentialsException("Invalid token claims.")
+
+        try:
+            int(payload["sub"])
+        except (ValueError, TypeError) as exc:
+            raise InvalidCredentialsException("Invalid token subject claim.") from exc
 
         return payload
     except jwt.PyJWTError:
@@ -158,10 +176,21 @@ def decode_refresh_token(token: str) -> dict[str, Any]:
             token,
             key=settings.REFRESH_SECRET_KEY,
             algorithms=[settings.ALGORITHM],
+            options={"require": ["sub", "exp", "iat", "jti", "fid", "type"]},
         )
 
-        if "sub" not in payload or "jti" not in payload or payload.get("type") != TokenType.REFRESH.value:
+        if (
+            "sub" not in payload
+            or not payload.get("jti")
+            or not payload.get("fid")
+            or payload.get("type") != TokenType.REFRESH.value
+        ):
             raise InvalidCredentialsException("Invalid refresh token claims.")
+
+        try:
+            int(payload["sub"])
+        except (ValueError, TypeError) as exc:
+            raise InvalidCredentialsException("Invalid refresh token subject claim.") from exc
 
         return payload
     except jwt.PyJWTError:

@@ -74,14 +74,15 @@ async def record_audit_event(
         Persisted AuditLog record.
     """
     repo = AuditRepository(session=session)
-    return await repo.log_event(
-        action=action,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        user_id=user_id,
-        changes_payload=changes_payload,
-        ip_address=ip_address,
-    )
+    async with session.begin_nested():
+        return await repo.log_event(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            user_id=user_id,
+            changes_payload=changes_payload,
+            ip_address=ip_address,
+        )
 
 
 async def list_audit_logs(

@@ -7,8 +7,10 @@ from src.exc import AlreadyExistsException, NotFoundException
 from src.modules.team_members.models import TeamMember
 from src.modules.team_members.repository import TeamMemberRepository
 from src.modules.user.models import User
+from src.share.event_bus import event_bus
 from src.share.helpers import slugify
 from src.share.responses import PageResult
+from src.share.schemas import AuditEvent
 from .models import Team
 from .repository import TeamRepository
 from .schemas import CreateTeamRequest, TeamResponse, UpdateTeamRequest
@@ -58,6 +60,16 @@ async def create_team(
     )
     await member_repo.create(initial_membership)
     await session.flush()
+
+    await event_bus.publish(
+        AuditEvent(
+            action="TEAM_CREATED",
+            entity_type="Team",
+            entity_id=str(team.id),
+            user_id=current_user.id,
+        ),
+        session=session,
+    )
 
     resp = TeamResponse.model_validate(team)
     resp.members_count = 1
@@ -153,6 +165,14 @@ async def delete_team(
         raise NotFoundException(entity="Team", identifier=team_id)
 
     await team_repo.delete(team)
+    await event_bus.publish(
+        AuditEvent(
+            action="TEAM_DELETED",
+            entity_type="Team",
+            entity_id=str(team_id),
+        ),
+        session=session,
+    )
 
 
 async def list_teams(
@@ -179,9 +199,12 @@ async def list_teams(
     else:
         page = await team_repo.get_user_teams(user_id=current_user.id, offset=offset, limit=limit)
 
+    team_ids = [t.id for t in page.items]
+    metrics_map = await team_repo.get_batch_team_metrics(team_ids)
+
     items_with_metrics: list[TeamResponse] = []
     for team in page.items:
-        members_count, projects_count = await team_repo.get_team_metrics(team.id)
+        members_count, projects_count = metrics_map.get(team.id, (0, 0))
         resp = TeamResponse.model_validate(team)
         resp.members_count = members_count
         resp.projects_count = projects_count

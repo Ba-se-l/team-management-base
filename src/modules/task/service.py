@@ -96,6 +96,12 @@ async def _validate_assignee_in_team(
     if assignee is None:
         raise NotFoundException(entity="User", identifier=assignee_id)
 
+    if not assignee.is_active:
+        raise BusinessRuleViolationException(
+            f"Cannot assign task to deactivated user account {assignee_id}.",
+            error_code="ASSIGNEE_INACTIVE",
+        )
+
     tm_repo = TeamMemberRepository(session=session)
     membership = await tm_repo.get_membership(member_id=assignee_id, team_id=team_id)
     if membership is None or not membership.is_active:
@@ -199,6 +205,8 @@ async def create_task(
     else:
         pos = await task_repo.get_next_position(project_id=project_id, status=schema.status)
 
+    completed_at = datetime.now(timezone.utc) if schema.status == TaskStatus.DONE else None
+
     task = Task(
         title=schema.title,
         description=schema.description,
@@ -206,12 +214,21 @@ async def create_task(
         priority=schema.priority,
         position=pos,
         deadline=schema.deadline,
+        completed_at=completed_at,
         project_id=project_id,
         creator_id=creator.id,
         assignee_to_id=schema.assignee_to_id,
     )
     task = await task_repo.create(task)
     await session.flush()
+
+    if schema.position is not None:
+        await task_repo.rebalance_column_around_task(
+            project_id=project_id,
+            status=schema.status,
+            moved_task=task,
+            target_position=schema.position,
+        )
 
     hydrated = await task_repo.get_task_with_details(task.id)
 
@@ -300,39 +317,6 @@ async def move_task(
     new_status = schema.status
     new_pos = schema.position
 
-    # Atomic position shifting to guarantee ordering integrity
-    if old_status == new_status:
-        if new_pos > old_pos:
-            await task_repo.shift_positions_between(
-                project_id=task.project_id,
-                status=old_status,
-                start_pos=old_pos + 0.001,
-                end_pos=new_pos,
-                delta=-1000.0,
-            )
-        elif new_pos < old_pos:
-            await task_repo.shift_positions_between(
-                project_id=task.project_id,
-                status=old_status,
-                start_pos=new_pos,
-                end_pos=old_pos - 0.001,
-                delta=1000.0,
-            )
-    else:
-        # Relocating to a different status column
-        await task_repo.shift_positions_after(
-            project_id=task.project_id,
-            status=old_status,
-            from_pos=old_pos + 0.001,
-            delta=-1000.0,
-        )
-        await task_repo.shift_positions_after(
-            project_id=task.project_id,
-            status=new_status,
-            from_pos=new_pos,
-            delta=1000.0,
-        )
-
     completed_at = task.completed_at
     if new_status == TaskStatus.DONE and old_status != TaskStatus.DONE:
         completed_at = datetime.now(timezone.utc)
@@ -347,6 +331,14 @@ async def move_task(
             "completed_at": completed_at,
         },
     )
+
+    final_pos = await task_repo.rebalance_column_around_task(
+        project_id=task.project_id,
+        status=new_status,
+        moved_task=task,
+        target_position=new_pos,
+    )
+    new_pos = final_pos
 
     hydrated = await task_repo.get_task_with_details(task.id)
 
@@ -421,6 +413,10 @@ async def update_task(
             session=session,
         )
 
+    old_status = task.status
+    status_changed = "status" in update_dict and update_dict["status"] != old_status
+    position_changed = "position" in update_dict
+
     if "status" in update_dict:
         new_status = update_dict["status"]
         if new_status == TaskStatus.DONE and task.status != TaskStatus.DONE:
@@ -429,6 +425,16 @@ async def update_task(
             update_dict["completed_at"] = None
 
     await task_repo.update(task, update_dict)
+
+    if status_changed or position_changed:
+        target_pos = update_dict.get("position") if position_changed else None
+        await task_repo.rebalance_column_around_task(
+            project_id=task.project_id,
+            status=task.status,
+            moved_task=task,
+            target_position=target_pos,
+        )
+
     hydrated = await task_repo.get_task_with_details(task.id)
     return _build_task_response(hydrated or task)
 
@@ -563,44 +569,58 @@ async def delete_comment(
     comment_id: int,
     current_user: User,
     session: AsyncSession,
+    expected_task_id: int | None = None,
 ) -> None:
-    """Deletes a discussion comment (author, team admin, or super admin only).
+    """Deletes a discussion comment (active team author, team admin, or super admin only).
 
     Args:
         comment_id: Comment integer primary key.
         current_user: Authenticated requester.
         session: Active asynchronous database session.
+        expected_task_id: Optional task ID from route path to enforce parent-child ownership.
 
     Raises:
-        NotFoundException: If comment does not exist.
-        ForbiddenException: If requester lacks authority to delete comment.
+        NotFoundException: If comment does not exist or does not belong to expected_task_id.
+        ForbiddenException: If requester lacks active team membership or authority to delete comment.
     """
     task_repo = TaskRepository(session=session)
     comment = await task_repo.get_comment(comment_id)
     if comment is None:
         raise NotFoundException(entity="TaskComment", identifier=comment_id)
 
-    if current_user.is_super_admin or comment.author_id == current_user.id:
+    if expected_task_id is not None and comment.task_id != expected_task_id:
+        raise NotFoundException(entity="TaskComment", identifier=comment_id)
+
+    if current_user.is_super_admin:
         await task_repo.delete_comment(comment)
         return
 
-    # Check if user is an ADMIN of the team owning this project/task
     task = await task_repo.get_by_id(comment.task_id)
-    if task is not None:
-        from src.modules.project.repository import ProjectRepository
-        from src.modules.team_members.repository import TeamMemberRepository
+    if task is None:
+        raise NotFoundException(entity="Task", identifier=comment.task_id)
 
-        project_repo = ProjectRepository(session=session)
-        project = await project_repo.get_by_id(task.project_id)
-        if project is not None:
-            member_repo = TeamMemberRepository(session=session)
-            membership = await member_repo.get_membership(
-                member_id=current_user.id,
-                team_id=project.team_id,
-            )
-            if membership is not None and membership.role == TeamRole.ADMIN:
-                await task_repo.delete_comment(comment)
-                return
+    from src.modules.project.repository import ProjectRepository
+    from src.modules.team_members.repository import TeamMemberRepository
+
+    project_repo = ProjectRepository(session=session)
+    project = await project_repo.get_by_id(task.project_id)
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=task.project_id)
+
+    member_repo = TeamMemberRepository(session=session)
+    membership = await member_repo.get_membership(
+        member_id=current_user.id,
+        team_id=project.team_id,
+    )
+    if membership is None or not membership.is_active:
+        raise ForbiddenException(
+            message="You must be an active member of this team workspace to delete comments.",
+            error_code="TEAM_MEMBERSHIP_REQUIRED",
+        )
+
+    if comment.author_id == current_user.id or membership.role == TeamRole.ADMIN:
+        await task_repo.delete_comment(comment)
+        return
 
     raise ForbiddenException(
         message="Cannot delete comments authored by other developers.",

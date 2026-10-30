@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, status
 
 from src.conf import settings
-from src.share.dependencies import CurrentUserDep, SessionDep
+from src.share.dependencies import CurrentUserDep, SessionDep, SuperAdminDep
 from . import service
 from .schemas import CreateTechnologyRequest, TechnologyResponse, UpdateTechnologyRequest
 
@@ -23,7 +23,7 @@ router = APIRouter(prefix=f"{settings.API_PREFIX}/technologies", tags=["Technolo
 )
 async def create_technology(
     request: CreateTechnologyRequest,
-    current_user: CurrentUserDep,
+    current_user: SuperAdminDep,
     session: SessionDep,
 ) -> TechnologyResponse:
     """Creates a new technology entry in the global catalog."""
@@ -96,7 +96,7 @@ async def get_technology(
 async def update_technology(
     tech_id: Annotated[int, Path(ge=1, description="Technology ID")],
     request: UpdateTechnologyRequest,
-    current_user: CurrentUserDep,
+    current_user: SuperAdminDep,
     session: SessionDep,
 ) -> TechnologyResponse:
     """Updates an existing technology entry."""
@@ -115,7 +115,7 @@ async def update_technology(
 )
 async def delete_technology(
     tech_id: Annotated[int, Path(ge=1, description="Technology ID")],
-    current_user: CurrentUserDep,
+    current_user: SuperAdminDep,
     session: SessionDep,
 ) -> TechnologyResponse:
     """Hard-deletes a technology from the catalog."""

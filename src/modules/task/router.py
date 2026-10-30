@@ -219,6 +219,7 @@ async def delete_task_comment(
         comment_id=comment_id,
         current_user=current_user,
         session=session,
+        expected_task_id=task_id,
     )
 
 

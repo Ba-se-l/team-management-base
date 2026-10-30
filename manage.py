@@ -48,6 +48,9 @@ async def create_admin(email: str, username: str, name: str, password: str | Non
             print("Error: Passwords do not match.", file=sys.stderr)
             sys.exit(1)
 
+    email = email.strip().lower()
+    username = username.strip()
+
     async with AsyncSessionLocal() as session:
         stmt = select(User).where((User.email == email) | (User.username == username))
         existing = (await session.execute(stmt)).scalars().first()
@@ -62,7 +65,7 @@ async def create_admin(email: str, username: str, name: str, password: str | Non
             hashed_password=hash_password(password),
             is_super_admin=True,
             is_active=True,
-            is_public_member=True,
+            is_public_member=False,
             job_title=JobTitle.SOFTWARE_ENGINEER,
             status=UserStatus.ONLINE,
         )
@@ -73,17 +76,37 @@ async def create_admin(email: str, username: str, name: str, password: str | Non
 
 async def seed_policies(reset: bool = False) -> None:
     """Initializes or resets standard Casbin RBAC policies."""
-    enforcer = await get_casbin_enforcer()
+    from src.security.authorization import reset_casbin_policies
+
     if reset:
         print("Clearing existing Casbin rules...")
-        await enforcer.clear_policy()
-
-    await init_default_casbin_policies(enforcer)
+        await reset_casbin_policies()
+    else:
+        enforcer = await get_casbin_enforcer()
+        await init_default_casbin_policies(enforcer)
     print("Casbin RBAC policies synchronized successfully.")
+
+
+async def purge_sessions() -> None:
+    """Purges all expired or revoked refresh token sessions from the database."""
+    from src.modules.auth.repo import RefreshSessionRepository
+
+    async with AsyncSessionLocal() as session:
+        repo = RefreshSessionRepository(session=session)
+        deleted = await repo.purge_expired_or_revoked()
+        await session.commit()
+        print(f"Purged {deleted} expired or revoked refresh session(s).")
 
 
 async def seed_demo() -> None:
     """Populates the database with a rich demo environment."""
+    from src.conf import settings
+
+    if settings.ENVIRONMENT == "prod":
+        raise RuntimeError(
+            "FATAL SECURITY BLOCK: 'seed-demo' is strictly prohibited when ENVIRONMENT='prod'."
+        )
+
     print("Seeding full demo workspace, team members, projects, tasks, and inquiries...")
     enforcer = await get_casbin_enforcer()
     await init_default_casbin_policies(enforcer)
@@ -218,6 +241,8 @@ async def seed_demo() -> None:
             await session.flush()
 
             # Tasks for Project 1
+            from datetime import datetime, timezone
+            now_utc = datetime.now(timezone.utc)
             tasks_p1 = [
                 Task(
                     title="Design event schema",
@@ -228,6 +253,7 @@ async def seed_demo() -> None:
                     project_id=proj1.id,
                     creator_id=dev_objs[0].id,
                     assignee_to_id=dev_objs[0].id,
+                    completed_at=now_utc,
                 ),
                 Task(
                     title="Configure Docker Compose cluster",
@@ -238,6 +264,7 @@ async def seed_demo() -> None:
                     project_id=proj1.id,
                     creator_id=dev_objs[0].id,
                     assignee_to_id=dev_objs[5].id,
+                    completed_at=now_utc,
                 ),
                 Task(
                     title="Implement token revocation family defense",
@@ -317,6 +344,7 @@ async def seed_demo() -> None:
                     project_id=proj2.id,
                     creator_id=dev_objs[1].id,
                     assignee_to_id=dev_objs[4].id,
+                    completed_at=now_utc,
                 ),
             ]
             session.add_all(tasks_p2)
@@ -391,6 +419,9 @@ def main() -> None:
     # seed-demo
     subparsers.add_parser("seed-demo", help="Seed a rich demo environment with teams, projects, and tasks")
 
+    # purge-sessions
+    subparsers.add_parser("purge-sessions", help="Purge expired or revoked refresh token sessions")
+
     # users list
     users_parser = subparsers.add_parser("users", help="Inspect platform users")
     users_parser.add_argument("action", choices=["list"], help="Action to execute")
@@ -407,6 +438,8 @@ def main() -> None:
         asyncio.run(seed_policies(args.reset))
     elif args.command == "seed-demo":
         asyncio.run(seed_demo())
+    elif args.command == "purge-sessions":
+        asyncio.run(purge_sessions())
     elif args.command == "users" and args.action == "list":
         asyncio.run(list_users())
     elif args.command == "policies" and args.action == "list":

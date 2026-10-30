@@ -36,6 +36,8 @@ class ServiceInquiry(Base, CreatedAtUpdatedAtMixin):
         nullable=False,
     )
 
+    admin_notes: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True, default=None)
 
     def __repr__(self) -> str:

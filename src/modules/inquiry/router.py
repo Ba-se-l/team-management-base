@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, status
 from src.conf import settings
 from src.database.enums import InquiryServiceType, InquiryStatus
 from src.security.guards import require_super_admin
-from src.share.dependencies import SessionDep
+from src.share.dependencies import CurrentUserDep, SessionDep
 from src.share.helpers import resolve_client_ip
 from src.share.rate_limit import RateLimiter
 from src.share.responses import PageResult
@@ -86,6 +86,7 @@ async def get_admin_inquiry(
 async def update_admin_inquiry(
     inquiry_id: Annotated[int, Path(ge=1, description="Inquiry ID")],
     payload: UpdateInquiryStatusRequest,
+    current_user: CurrentUserDep,
     session: SessionDep,
 ) -> InquiryResponse:
     """Updates status for an inquiry."""
@@ -93,4 +94,5 @@ async def update_admin_inquiry(
         inquiry_id=inquiry_id,
         schema=payload,
         session=session,
+        actor_id=current_user.id,
     )
