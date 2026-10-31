@@ -1,486 +1,119 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevStation Platform // Enterprise Full-Stack Engineering Guild</title>
-    <meta name="description" content="Production-ready developer workspace, showcase portal, and sprint management platform for high-velocity software engineering teams.">
-    
-    <!-- Google Fonts: Inter & Outfit -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Google Material Icons Round -->
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="./css/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Team Management Base V1 — منصة إدارة الفرق الهندسية والمعرض العام</title>
+  <link rel="stylesheet" href="/css/tokens.css" />
+  <link rel="stylesheet" href="/css/base.css" />
+  <link rel="stylesheet" href="/css/layout.css" />
+  <link rel="stylesheet" href="/css/components.css" />
+  <link rel="stylesheet" href="/css/pages.css" />
 </head>
 <body>
-
-    <!-- =======================================================================
-         TOP APPLICATION HEADER
-         ======================================================================= -->
-    <header class="app-header">
-        <div class="brand-wrapper" id="brand-home-link">
-            <div class="brand-icon-box">
-                <span class="material-icons-round">hub</span>
-            </div>
-            <div class="brand-title">DEVSTATION <span style="color: var(--primary-light); font-weight: 400;">// BASE</span></div>
-        </div>
-
-        <!-- Dual Mode Switcher -->
-        <nav class="mode-toggle" aria-label="Portal Mode">
-            <button type="button" class="mode-btn active" id="btn-mode-showcase">
-                <span class="material-icons-round">public</span> Showcase Portal
-            </button>
-            <button type="button" class="mode-btn" id="btn-mode-workspace">
-                <span class="material-icons-round">dashboard</span> Workspace Kanban
-            </button>
+  <!-- Public Portal Shell (P01 - P06) -->
+  <div id="public-shell" class="public-shell">
+    <header class="public-header" role="banner">
+      <div class="container public-header-inner">
+        <a href="#/" class="brand-logo" aria-label="الصفحة الرئيسية">
+          <span class="brand-mark">TM</span>
+          <span>Team Management V1</span>
+        </a>
+        <nav class="public-nav" aria-label="التنقل العام">
+          <a href="#/" class="btn btn-sm btn-outline" data-nav-link="#/">الرئيسية</a>
+          <a href="#/projects" class="btn btn-sm btn-outline" data-nav-link="#/projects">معرض المشاريع</a>
+          <a href="#/members" class="btn btn-sm btn-outline" data-nav-link="#/members">الكفاءات الهندسية</a>
+          <a href="#/contact" class="btn btn-sm btn-outline" data-nav-link="#/contact">طلب مشروع / انضمام</a>
+          <a href="#/login" id="public-auth-cta" class="btn btn-sm btn-primary">بوابة المطورين</a>
         </nav>
-
-        <!-- User Controls / Quick Auth -->
-        <div class="header-actions">
-            <div class="user-badge" id="user-badge-display">
-                <div class="avatar-dot" id="user-status-dot"></div>
-                <span id="user-display-name">Guest Visitor</span>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-open-auth">
-                <span class="material-icons-round">account_circle</span> <span id="auth-btn-label">Sign In</span>
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-logout" style="display: none;">
-                <span class="material-icons-round">logout</span>
-            </button>
-        </div>
+      </div>
     </header>
 
-    <!-- =======================================================================
-         VIEW 1: PUBLIC SHOWCASE PORTAL
-         ======================================================================= -->
-    <main id="view-showcase" class="showcase-container">
-        <!-- Hero Section -->
-        <section class="hero-section">
-            <div class="hero-badge">
-                <span class="material-icons-round" style="font-size: 16px;">verified</span> Enterprise Engineering Platform
-            </div>
-            <h1 class="hero-title">Architecting Resilient Platforms<br><span>& High-Velocity Teams</span></h1>
-            <p class="hero-subtitle">
-                We design, build, and scale mission-critical digital infrastructure using modern asynchronous Python, distributed architectures, and rigorous engineering practices.
-            </p>
-            <div style="display: flex; gap: 14px; justify-content: center; flex-wrap: wrap;">
-                <a href="#inquiry-section" class="btn btn-primary" id="btn-hero-consult">
-                    <span class="material-icons-round">send</span> Start Consultation
-                </a>
-                <button type="button" class="btn btn-secondary" id="btn-hero-workspace">
-                    <span class="material-icons-round">view_kanban</span> Open Live Workspace
-                </button>
-            </div>
-        </section>
+    <main id="public-view-root" class="public-main container" role="main" aria-live="polite"></main>
 
-        <!-- Live Metrics Strip -->
-        <section class="stats-strip" id="stats-strip" aria-label="Live Platform Metrics">
-            <div class="stat-card">
-                <div class="stat-num" id="stat-projects">-</div>
-                <div class="stat-label">Active Projects</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num" id="stat-teams">-</div>
-                <div class="stat-label">Engineering Guilds</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num" id="stat-members">-</div>
-                <div class="stat-label">Staff Engineers</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num" id="stat-tasks">-</div>
-                <div class="stat-label">Tracked Sprints</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-num" id="stat-techs">-</div>
-                <div class="stat-label">Technologies</div>
-            </div>
-        </section>
-
-        <!-- Project Portfolio Showcase -->
-        <section style="margin-bottom: 64px;">
-            <div class="section-header">
-                <div>
-                    <h2>Featured Deployments & Systems</h2>
-                    <p>Production applications, microservices, and platforms delivered by our engineering guild.</p>
-                </div>
-            </div>
-
-            <!-- Technology Filter Bar -->
-            <div class="tech-tag-row" id="tech-filter-bar" style="margin-bottom: 24px;">
-                <button type="button" class="btn btn-sm btn-primary filter-tech-btn active" data-slug="">All Technologies</button>
-                <!-- Populated dynamically via JS -->
-            </div>
-
-            <!-- Projects Grid -->
-            <div class="projects-grid" id="showcase-projects-grid">
-                <!-- Dynamically injected project cards -->
-            </div>
-        </section>
-
-        <!-- Engineering Roster -->
-        <section style="margin-bottom: 72px;">
-            <div class="section-header">
-                <div>
-                    <h2>Engineering Leadership & Team Roster</h2>
-                    <p>Meet our core architects, staff engineers, and systems developers.</p>
-                </div>
-            </div>
-            <div class="members-grid" id="showcase-team-grid">
-                <!-- Dynamically injected member cards -->
-            </div>
-        </section>
-
-        <!-- Client Inquiry & Consultation Form -->
-        <section id="inquiry-section" style="margin-bottom: 40px;">
-            <div class="inquiry-card">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <span class="material-icons-round" style="font-size: 36px; color: var(--primary-light);">contact_support</span>
-                    <h2 style="font-size: 26px; margin-top: 6px;">Initiate a Technical Consultation</h2>
-                    <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
-                        Connect with our solutions architects to discuss custom platform architecture or dedicated team augmentation.
-                    </p>
-                </div>
-
-                <form id="form-inquiry">
-                    <!-- Bot Honeypot field (hidden from legitimate users, traps spam bots) -->
-                    <div style="display: none;" aria-hidden="true">
-                        <label for="honeypot-field">Leave blank</label>
-                        <input type="text" id="honeypot-field" name="company_website" tabindex="-1" autocomplete="off">
-                    </div>
-
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label for="inq-name">Your Full Name *</label>
-                            <input type="text" id="inq-name" class="form-input" placeholder="Sarah Connor" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="inq-email">Work Email *</label>
-                            <input type="email" id="inq-email" class="form-input" placeholder="sarah@cyberdyne.io" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="inq-company">Company / Organization</label>
-                            <input type="text" id="inq-company" class="form-input" placeholder="Cyberdyne Systems">
-                        </div>
-                        <div class="form-group">
-                            <label for="inq-budget">Estimated Budget</label>
-                            <select id="inq-budget" class="form-select">
-                                <option value="">Select scope</option>
-                                <option value="$10,000 - $25,000">$10,000 - $25,000</option>
-                                <option value="$25,000 - $50,000">$25,000 - $50,000</option>
-                                <option value="$50,000 - $100,000">$50,000 - $100,000</option>
-                                <option value="$100,000+">$100,000+</option>
-                            </select>
-                        </div>
-                        <div class="form-group full-width">
-                            <label for="inq-message">Project Scope & Technical Requirements *</label>
-                            <textarea id="inq-message" class="form-textarea" rows="4" placeholder="Briefly describe your technical objectives, stack preferences, and delivery timeline..." required></textarea>
-                        </div>
-                    </div>
-
-                    <div style="text-align: right; margin-top: 12px;">
-                        <button type="submit" class="btn btn-primary" id="btn-submit-inquiry" style="width: 100%;">
-                            <span class="material-icons-round">send</span> Transmit Consultation Request
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </section>
-    </main>
-
-    <!-- =======================================================================
-         VIEW 2: DEVELOPER WORKSPACE & KANBAN
-         ======================================================================= -->
-    <div id="view-workspace" class="workspace-wrapper" style="display: none;">
-        <!-- Left Sidebar -->
-        <aside class="workspace-sidebar">
-            <div>
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 12px; padding-left: 8px;">
-                    WORKSPACE NAVIGATION
-                </div>
-                <div class="sidebar-nav-group">
-                    <button type="button" class="ws-nav-btn active" id="ws-nav-kanban">
-                        <span class="material-icons-round">view_kanban</span> Kanban Board
-                    </button>
-                    <button type="button" class="ws-nav-btn" id="ws-nav-projects">
-                        <span class="material-icons-round">folder</span> Projects
-                    </button>
-                    <button type="button" class="ws-nav-btn" id="ws-nav-teams">
-                        <span class="material-icons-round">groups</span> Teams & Roles
-                    </button>
-                    <button type="button" class="ws-nav-btn" id="ws-nav-inquiries">
-                        <span class="material-icons-round">inbox</span> Inquiries Triage
-                    </button>
-                </div>
-            </div>
-
-            <!-- Demo Authentication Profiles -->
-            <div id="demo-profiles-container" style="display: none;">
-                <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 12px; padding-left: 8px;">
-                    FAST DEMO PROFILES
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-admin" style="justify-content: flex-start; text-align: left;">
-                        <span class="material-icons-round" style="color: var(--accent-rose); font-size: 16px;">admin_panel_settings</span>
-                        <span>Tech Lead (Admin)</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-dev" style="justify-content: flex-start; text-align: left;">
-                        <span class="material-icons-round" style="color: var(--accent-cyan); font-size: 16px;">code</span>
-                        <span>Senior Dev (Member)</span>
-                    </button>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Right Content Body -->
-        <main class="workspace-content">
-            <!-- Sub-view 1: Kanban Board -->
-            <section id="ws-sub-kanban">
-                <div class="kanban-header-bar">
-                    <div class="project-picker">
-                        <label for="select-kanban-project" style="font-size: 13px; font-weight: 600; color: var(--text-secondary);">
-                            Active Project:
-                        </label>
-                        <select id="select-kanban-project" class="form-select" style="min-width: 280px; padding: 7px 12px;">
-                            <option value="">Loading projects...</option>
-                        </select>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-kanban">
-                            <span class="material-icons-round">sync</span> Refresh
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btn-open-create-task">
-                            <span class="material-icons-round">add</span> Create Task
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 4 Columns Kanban Layout -->
-                <div class="kanban-board" id="kanban-board-container">
-                    <!-- Column 1: todo -->
-                    <div class="kanban-column" data-status="todo" id="kanban-col-todo">
-                        <div class="column-header">
-                            <div class="column-title">
-                                <span class="material-icons-round" style="font-size: 18px; color: var(--text-muted);">radio_button_unchecked</span>
-                                To Do
-                            </div>
-                            <span class="task-count-badge" id="count-todo">0</span>
-                        </div>
-                        <div class="column-cards-container" id="cards-container-todo"></div>
-                    </div>
-
-                    <!-- Column 2: in_progress -->
-                    <div class="kanban-column" data-status="in_progress" id="kanban-col-in-progress">
-                        <div class="column-header">
-                            <div class="column-title">
-                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-cyan);">trending_up</span>
-                                In Progress
-                            </div>
-                            <span class="task-count-badge" id="count-in-progress">0</span>
-                        </div>
-                        <div class="column-cards-container" id="cards-container-in-progress"></div>
-                    </div>
-
-                    <!-- Column 3: in_review -->
-                    <div class="kanban-column" data-status="in_review" id="kanban-col-in-review">
-                        <div class="column-header">
-                            <div class="column-title">
-                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-amber);">rate_review</span>
-                                In Review
-                            </div>
-                            <span class="task-count-badge" id="count-in-review">0</span>
-                        </div>
-                        <div class="column-cards-container" id="cards-container-in-review"></div>
-                    </div>
-
-                    <!-- Column 4: done -->
-                    <div class="kanban-column" data-status="done" id="kanban-col-done">
-                        <div class="column-header">
-                            <div class="column-title">
-                                <span class="material-icons-round" style="font-size: 18px; color: var(--accent-emerald);">check_circle</span>
-                                Done
-                            </div>
-                            <span class="task-count-badge" id="count-done">0</span>
-                        </div>
-                        <div class="column-cards-container" id="cards-container-done"></div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Sub-view 2: Projects Overview -->
-            <section id="ws-sub-projects" style="display: none;">
-                <div class="section-header">
-                    <div>
-                        <h2>Internal Projects Registry</h2>
-                        <p>All active development initiatives, architecture repositories, and teams.</p>
-                    </div>
-                </div>
-                <div class="projects-grid" id="ws-projects-grid"></div>
-            </section>
-
-            <!-- Sub-view 3: Teams & Roles -->
-            <section id="ws-sub-teams" style="display: none;">
-                <div class="section-header">
-                    <div>
-                        <h2>Teams & Guild Governance</h2>
-                        <p>Scoped RBAC permissions, member rosters, and team leadership.</p>
-                    </div>
-                </div>
-                <div id="ws-teams-container"></div>
-            </section>
-
-            <!-- Sub-view 4: Inquiries Triage -->
-            <section id="ws-sub-inquiries" style="display: none;">
-                <div class="section-header">
-                    <div>
-                        <h2>Client Consultations & Leads Triage</h2>
-                        <p>Manage incoming enterprise inquiries submitted via the showcase portal.</p>
-                    </div>
-                </div>
-                <div class="inquiry-card" style="max-width: 100%; padding: 20px;">
-                    <div id="inquiries-table-container">Loading inquiries...</div>
-                </div>
-            </section>
-        </main>
-    </div>
-
-    <!-- =======================================================================
-         MODAL 1: TASK DETAILS & DISCUSSION THREAD
-         ======================================================================= -->
-    <div class="modal-overlay" id="modal-task-details">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span id="detail-priority-badge" class="priority-chip priority-high">HIGH</span>
-                    <span id="detail-status-badge" class="status-pill status-active">IN PROGRESS</span>
-                </div>
-                <button type="button" class="modal-close-btn" onclick="closeModal('modal-task-details')">
-                    <span class="material-icons-round">close</span>
-                </button>
-            </div>
-
-            <h3 id="detail-task-title" style="font-size: 22px; margin-bottom: 12px;">Task Title</h3>
-            <p id="detail-task-desc" style="color: var(--text-secondary); font-size: 14px; margin-bottom: 20px; line-height: 1.6;">
-                Task description details...
-            </p>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; padding: 12px; background: var(--bg-card); border-radius: var(--radius-md); font-size: 13px;">
-                <div><span style="color: var(--text-muted);">Assigned To:</span> <strong id="detail-assignee">Unassigned</strong></div>
-                <div><span style="color: var(--text-muted);">Due Date:</span> <strong id="detail-due-date">N/A</strong></div>
-            </div>
-
-            <!-- Comments & Discussion Thread -->
-            <div class="comments-container">
-                <h4 style="font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
-                    <span class="material-icons-round" style="font-size: 18px; color: var(--primary-light);">forum</span>
-                    Activity & Discussion
-                </h4>
-
-                <!-- Existing comments -->
-                <div id="task-comments-list" style="max-height: 240px; overflow-y: auto; margin-bottom: 16px;">
-                    <!-- Injected comment bubbles -->
-                </div>
-
-                <!-- Add comment form -->
-                <form id="form-add-comment" style="display: flex; gap: 10px;">
-                    <input type="text" id="input-new-comment" class="form-input" placeholder="Post a technical update or comment..." required style="flex: 1;">
-                    <button type="submit" class="btn btn-primary btn-sm">
-                        <span class="material-icons-round">send</span>
-                    </button>
-                </form>
-            </div>
+    <footer class="public-footer" role="contentinfo">
+      <div class="container public-footer-inner">
+        <div>
+          <strong>Team Management Base V1.0</strong> — بنية FastAPI + Casbin RBAC معزولة الموارد
         </div>
-    </div>
-
-    <!-- =======================================================================
-         MODAL 2: CREATE TASK
-         ======================================================================= -->
-    <div class="modal-overlay" id="modal-create-task">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3>Create New Sprint Task</h3>
-                <button type="button" class="modal-close-btn" onclick="closeModal('modal-create-task')">
-                    <span class="material-icons-round">close</span>
-                </button>
-            </div>
-
-            <form id="form-create-task">
-                <div class="form-group">
-                    <label for="create-task-title">Title *</label>
-                    <input type="text" id="create-task-title" class="form-input" placeholder="e.g., Implement Casbin Scope Resolver" required>
-                </div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label for="create-task-priority">Priority</label>
-                        <select id="create-task-priority" class="form-select">
-                            <option value="medium" selected>MEDIUM</option>
-                            <option value="low">LOW</option>
-                            <option value="high">HIGH</option>
-                            <option value="critical">CRITICAL</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="create-task-status">Initial Status</label>
-                        <select id="create-task-status" class="form-select">
-                            <option value="todo" selected>To Do</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="in_review">In Review</option>
-                            <option value="done">Done</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="create-task-desc">Description</label>
-                    <textarea id="create-task-desc" class="form-textarea" rows="3" placeholder="Provide context, acceptance criteria, or architectural notes..."></textarea>
-                </div>
-                <div style="text-align: right; margin-top: 16px;">
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">
-                        <span class="material-icons-round">add_task</span> Create Task
-                    </button>
-                </div>
-            </form>
+        <div id="public-health-strip" class="page-header-actions" aria-label="حالة النظام">
+          <span class="badge">جاري فحص حالة الخادم...</span>
         </div>
-    </div>
+      </div>
+    </footer>
+  </div>
 
-    <!-- =======================================================================
-         MODAL 3: AUTHENTICATION
-         ======================================================================= -->
-    <div class="modal-overlay" id="modal-auth">
-        <div class="modal-box" style="max-width: 420px;">
-            <div class="modal-header">
-                <h3 id="auth-modal-title">Sign In to DevStation</h3>
-                <button type="button" class="modal-close-btn" onclick="closeModal('modal-auth')">
-                    <span class="material-icons-round">close</span>
-                </button>
-            </div>
+  <!-- Authenticated Workspace Shell (P07 - P18) -->
+  <div id="workspace-shell" class="workspace-shell hidden">
+    <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
-            <form id="form-auth-login">
-                <div class="form-group">
-                    <label for="auth-email">Email Address</label>
-                    <input type="email" id="auth-email" class="form-input" placeholder="alex@agency.io" required>
-                </div>
-                <div class="form-group">
-                    <label for="auth-password">Password</label>
-                    <input type="password" id="auth-password" class="form-input" placeholder="••••••••••••" required>
-                </div>
-                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 8px;">
-                    <span class="material-icons-round">login</span> Sign In
-                </button>
-            </form>
+    <aside id="workspace-sidebar" class="workspace-sidebar" aria-label="القائمة الجانبية لمساحة العمل">
+      <div class="sidebar-header">
+        <a href="#/app/dashboard" class="brand-logo">
+          <span class="brand-mark">TM</span>
+          <span>مساحة العمل V1</span>
+        </a>
+        <button type="button" id="sidebar-close-btn" class="btn btn-sm btn-outline mobile-menu-btn" aria-label="إغلاق القائمة">✕</button>
+      </div>
+
+      <div class="sidebar-body">
+        <div>
+          <div class="sidebar-group-title">التشغيل الهندسي</div>
+          <ul class="sidebar-nav-list">
+            <li><a href="#/app/dashboard" class="sidebar-link" data-route-link="#/app/dashboard"><span>لوحة المطور</span><span class="badge">P07</span></a></li>
+            <li><a href="#/app/my-tasks" class="sidebar-link" data-route-link="#/app/my-tasks"><span>مهامي المسندة</span><span class="badge">P12</span></a></li>
+            <li><a href="#/app/teams" class="sidebar-link" data-route-link="#/app/teams"><span>الفرق الهندسية</span><span class="badge">P08</span></a></li>
+            <li><a href="#/app/projects" class="sidebar-link" data-route-link="#/app/projects"><span>مستكشف المشاريع</span><span class="badge">P10</span></a></li>
+            <li><a href="#/app/technologies" class="sidebar-link" data-route-link="#/app/technologies"><span>كتالوج التقنيات</span><span class="badge">P15</span></a></li>
+          </ul>
         </div>
+
+        <div id="sidebar-admin-group" class="hidden">
+          <div class="sidebar-group-title">الحوكمة والإدارة العليا</div>
+          <ul class="sidebar-nav-list">
+            <li id="nav-item-users" class="hidden"><a href="#/app/admin/users" class="sidebar-link" data-route-link="#/app/admin/users"><span>دليل وإدارة المستخدمين</span><span class="badge">P14</span></a></li>
+            <li id="nav-item-inquiries" class="hidden"><a href="#/app/admin/inquiries" class="sidebar-link" data-route-link="#/app/admin/inquiries"><span>صندوق الاستفسارات</span><span class="badge">P16</span></a></li>
+            <li id="nav-item-audit" class="hidden"><a href="#/app/admin/audit" class="sidebar-link" data-route-link="#/app/admin/audit"><span>سجل التدقيق الجنائي</span><span class="badge">P17</span></a></li>
+          </ul>
+        </div>
+
+        <div>
+          <div class="sidebar-group-title">الحساب والتشخيص</div>
+          <ul class="sidebar-nav-list">
+            <li><a href="#/app/account" class="sidebar-link" data-route-link="#/app/account"><span>إعدادات الحساب والأمان</span><span class="badge">P13</span></a></li>
+            <li><a href="#/app/diagnostics" class="sidebar-link" data-route-link="#/app/diagnostics"><span>مختبر العقود والتشخيص</span><span class="badge">P18</span></a></li>
+            <li><a href="#/" class="sidebar-link"><span>البوابة العامة للزوار</span><span class="badge">P01</span></a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div id="sidebar-user-summary" class="form-group"></div>
+      </div>
+    </aside>
+
+    <div class="workspace-main">
+      <header class="workspace-topbar">
+        <div class="page-header-actions">
+          <button type="button" id="sidebar-open-btn" class="btn btn-sm btn-outline mobile-menu-btn" aria-label="فتح القائمة الجانبية">☰ القائمة</button>
+          <span id="workspace-breadcrumb" class="stat-label">لوحة العمل الهندسية</span>
+        </div>
+        <div class="page-header-actions">
+          <span id="topbar-role-badge" class="badge badge-brand">مطور</span>
+          <a href="#/app/account" class="btn btn-sm btn-outline">حسابي</a>
+          <button type="button" id="topbar-logout-btn" class="btn btn-sm btn-danger">تسجيل الخروج</button>
+        </div>
+      </header>
+
+      <main id="workspace-view-root" class="workspace-content" role="main" aria-live="polite"></main>
     </div>
+  </div>
 
-    <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container" aria-live="polite"></div>
+  <!-- Global Accessible Overlays -->
+  <div id="modal-root" aria-live="polite"></div>
+  <div id="drawer-root" aria-live="polite"></div>
+  <div id="toast-root" class="toast-container" aria-live="assertive" aria-atomic="true"></div>
 
-    <!-- Application Logic Scripts -->
-    <script src="./js/core/api.js"></script>
-    <script src="./js/core/ui.js"></script>
-    <script src="./js/app.js"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>
