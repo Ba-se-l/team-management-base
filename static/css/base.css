@@ -1,4 +1,4 @@
-/* static/css/base.css — Reset, Typography, Accessibility & Focus States */
+/* static/css/base.css — Reset, Zero-Overflow Containment, Typography & Accessibility */
 *,
 *::before,
 *::after {
@@ -11,6 +11,9 @@ html {
   font-size: 16px;
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow-x: clip;
 }
 
 body {
@@ -19,8 +22,47 @@ body {
   line-height: 1.6;
   color: var(--text-primary);
   background-color: var(--bg-canvas);
-  min-height: 100vh;
-  overflow-x: hidden;
+  min-block-size: 100vh;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow-x: clip;
+}
+
+/* The min-inline-size: 0 Law across all Grid/Flex containers & children */
+.public-shell,
+.public-main,
+.workspace-shell,
+.workspace-main,
+.workspace-content,
+.container,
+.card,
+.stat-card,
+.kanban-column,
+.kanban-card,
+.form-grid,
+.form-group,
+.table-scroll-container,
+.modal-dialog,
+.modal-body,
+.drawer-panel,
+.drawer-body,
+.page-header,
+.page-header-actions,
+.filter-bar,
+.alert-banner,
+.user-inline-cell {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Strict Text & Long URL Wrapping to prevent parent box blowout */
+h1, h2, h3, h4, h5, h6,
+p, td, th, a, span, label, code, pre,
+.kanban-card-title,
+.field-hint,
+.field-error {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -82,8 +124,8 @@ pre,
 
 .sr-only {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inline-size: 1px;
+  block-size: 1px;
   padding: 0;
   margin: -1px;
   overflow: hidden;
@@ -96,14 +138,13 @@ pre,
   display: none !important;
 }
 
-/* Honeypot trap strictly hidden from humans */
+/* Honeypot trap strictly hidden from humans using logical inset */
 .hp-trap-field {
   position: absolute !important;
-  left: -9999px !important;
-  width: 1px !important;
-  height: 1px !important;
+  inset-inline-start: -9999px !important;
+  inline-size: 1px !important;
+  block-size: 1px !important;
   overflow: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
-

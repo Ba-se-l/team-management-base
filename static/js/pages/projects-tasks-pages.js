@@ -4,7 +4,6 @@ import {
   ProjectVisibility,
   TaskStatus,
   TaskPriority,
-  TechnologyCategory,
   formatEnumLabel,
 } from '../contracts/enums.js';
 import {
@@ -15,6 +14,9 @@ import {
 import { store } from '../core/store.js';
 import { capabilities } from '../core/capabilities.js';
 import { ui, escapeHtml } from '../core/ui.js';
+import { t, tr } from '../core/i18n.js';
+import { renderIcon } from '../components/icon.js';
+import { renderAvatar } from '../components/avatar.js';
 import { teamsService } from '../services/teams.js';
 import { membersService } from '../services/members.js';
 import { projectsService } from '../services/projects.js';
@@ -61,7 +63,9 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
   if (isStale()) return;
 
   const loadExplorer = async () => {
-    container.innerHTML = ui.renderLoadingSkeleton('جاري تحميل مستكشف المشاريع الهندسية...');
+    container.innerHTML = ui.renderLoadingSkeleton(
+      tr('جاري تحميل مستكشف المشاريع الهندسية...', 'Loading engineering projects explorer...')
+    );
 
     const pageModel = filters.teamId
       ? await projectsService.listByTeam(
@@ -90,17 +94,17 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <h1>مستكشف المشاريع الهندسية الموحد (P10)</h1>
-          <p>استعراض كافة المشاريع المتاحة لك (E27) أو تصفية مشاريع فريق محدد (E26).</p>
+          <h1>${escapeHtml(tr('مستكشف المشاريع الهندسية الموحد (P10)', 'Unified Engineering Projects Explorer (P10)'))}</h1>
+          <p>${escapeHtml(tr('استعراض كافة المشاريع المتاحة لك (E27) أو تصفية مشاريع فريق محدد (E26).', 'Browse all projects accessible to you (E27) or filter by a specific team (E26).'))}</p>
         </div>
         <div class="page-header-actions">
           <form id="open-project-by-id-form" class="page-header-actions">
-            <input name="project_id" type="number" min="1" class="form-control" style="width:12rem;" placeholder="فتح/استرجاع مشروع بالمعرف #" required />
-            <button type="submit" class="btn btn-sm btn-outline">فتح المشروع (E28)</button>
+            <input name="project_id" type="number" min="1" class="form-control" style="inline-size:12rem;" placeholder="${escapeHtml(tr('فتح/استرجاع مشروع بالمعرف #', 'Open/recover project by ID #'))}" required />
+            <button type="submit" class="btn btn-sm btn-outline">${renderIcon('search', { size: 14 })} <span>${escapeHtml(tr('فتح المشروع (E28)', 'Open Project (E28)'))}</span></button>
           </form>
           ${
             teamsList.length > 0
-              ? `<button type="button" id="explorer-create-project-btn" class="btn btn-primary">+ إنشاء مشروع جديد (E25)</button>`
+              ? `<button type="button" id="explorer-create-project-btn" class="btn btn-primary">${renderIcon('plus', { size: 15 })} <span>${escapeHtml(tr('إنشاء مشروع جديد (E25)', 'Create New Project (E25)'))}</span></button>`
               : ''
           }
         </div>
@@ -110,15 +114,15 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
         deactivatedProjects.length > 0
           ? `<div class="alert-banner alert-warning">
               <div>
-                <strong>مشاريع تم تعطيلها مؤخراً في هذه الجلسة (قابلة للاستعادة عبر E29):</strong>
-                <div class="page-header-actions" style="margin-top:0.4rem;">
+                <strong>${escapeHtml(tr('مشاريع تم تعطيلها مؤخراً في هذه الجلسة (قابلة للاستعادة عبر E29):', 'Recently deactivated projects in this session (recoverable via E29):'))}</strong>
+                <div class="page-header-actions" style="margin-block-start:0.4rem;">
                   ${deactivatedProjects
                     .map(
                       (dp) => `
                     <span class="badge badge-warning">
                       ${escapeHtml(dp.label)} (#${dp.id})
-                      <button type="button" class="btn btn-sm btn-outline" data-restore-project="${dp.id}">إعادة تفعيل (E29)</button>
-                      <a href="#/app/projects/${dp.id}" class="btn btn-sm btn-outline">فتح</a>
+                      <button type="button" class="btn btn-sm btn-outline" data-restore-project="${dp.id}">${renderIcon('refresh-cw', { size: 13 })} <span>${escapeHtml(tr('إعادة تفعيل (E29)', 'Reactivate (E29)'))}</span></button>
+                      <a href="#/app/projects/${dp.id}" class="btn btn-sm btn-outline">${escapeHtml(t('common.open'))}</a>
                     </span>
                   `
                     )
@@ -130,30 +134,30 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
       }
 
       <form id="projects-explorer-filter-form" class="filter-bar">
-        <div class="form-group" style="min-width:14rem;">
-          <label class="form-label" for="exp-team-filter">نطاق الفريق (E27 الكل / E26 فريق محدد)</label>
+        <div class="form-group">
+          <label class="form-label" for="exp-team-filter">${escapeHtml(tr('نطاق الفريق (E27 الكل / E26 فريق محدد)', 'Team Scope (E27 All / E26 Specific Team)'))}</label>
           <select id="exp-team-filter" name="team_id" class="form-control">
-            <option value="">كل الفرق المتاحة (E27)</option>
+            <option value="">${escapeHtml(tr('كل الفرق المتاحة (E27)', 'All Accessible Teams (E27)'))}</option>
             ${teamsList
               .map(
-                (t) =>
-                  `<option value="${t.id}" ${
-                    String(filters.teamId) === String(t.id) ? 'selected' : ''
-                  }>${escapeHtml(t.name)} (#${t.id})</option>`
+                (team) =>
+                  `<option value="${team.id}" ${
+                    String(filters.teamId) === String(team.id) ? 'selected' : ''
+                  }>${escapeHtml(team.name)} (#${team.id})</option>`
               )
               .join('')}
           </select>
         </div>
 
-        <div class="form-group" style="min-width:13rem;">
-          <label class="form-label" for="exp-status-filter">الحالة (status)</label>
+        <div class="form-group">
+          <label class="form-label" for="exp-status-filter">${escapeHtml(tr('الحالة (status)', 'Status (status)'))}</label>
           <select id="exp-status-filter" name="status" class="form-control">
-            ${renderEnumSelect(ProjectStatus, 'ProjectStatus', filters.status, 'كل الحالات')}
+            ${renderEnumSelect(ProjectStatus, 'ProjectStatus', filters.status, tr('كل الحالات', 'All Statuses'))}
           </select>
         </div>
 
-        <div class="form-group" style="min-width:13rem;">
-          <label class="form-label" for="exp-vis-filter">مستوى الظهور (visibility — E27)</label>
+        <div class="form-group">
+          <label class="form-label" for="exp-vis-filter">${escapeHtml(tr('مستوى الظهور (visibility — E27)', 'Visibility (visibility — E27)'))}</label>
           <select id="exp-vis-filter" name="visibility" class="form-control" ${
             filters.teamId ? 'disabled' : ''
           }>
@@ -161,20 +165,20 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
               ProjectVisibility,
               'ProjectVisibility',
               filters.visibility,
-              'كل مستويات الظهور'
+              tr('كل مستويات الظهور', 'All Visibility Levels')
             )}
           </select>
         </div>
 
         <div class="page-header-actions">
-          <button type="submit" class="btn btn-primary">تطبيق التصفية</button>
-          <button type="button" id="exp-reset-btn" class="btn btn-outline">إعادة ضبط</button>
+          <button type="submit" class="btn btn-primary">${renderIcon('filter', { size: 15 })} <span>${escapeHtml(t('common.applyFilter'))}</span></button>
+          <button type="button" id="exp-reset-btn" class="btn btn-outline">${renderIcon('refresh-cw', { size: 15 })} <span>${escapeHtml(t('common.reset'))}</span></button>
         </div>
       </form>
 
       ${
         pageModel.items.length === 0
-          ? ui.renderEmptyState('لا توجد مشاريع مطابقة لمعايير البحث الحالية')
+          ? ui.renderEmptyState(tr('لا توجد مشاريع مطابقة لمعايير البحث الحالية', 'No projects match the current filter criteria'))
           : `<div class="responsive-card-grid">
               ${pageModel.items
                 .map(
@@ -183,7 +187,7 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
                   <div class="card-header">
                     <div>
                       <h3><a href="#/app/projects/${proj.id}">${escapeHtml(proj.title)}</a></h3>
-                      <span class="field-hint mono">#${proj.id} | فريق #${proj.team_id} | ${escapeHtml(proj.slug)}</span>
+                      <span class="field-hint mono">#${proj.id} | ${escapeHtml(tr('فريق', 'Team'))} #${proj.team_id} | ${escapeHtml(proj.slug)}</span>
                     </div>
                     <div class="page-header-actions">
                       ${ui.renderBadge('ProjectStatus', proj.status)}
@@ -192,14 +196,14 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
                   </div>
                   <p>${escapeHtml(proj.short_description)}</p>
                   <div class="page-header-actions">
-                    <span class="badge">المهام المنجزة: ${Number(proj.tasks_completed_count || 0)}/${Number(proj.tasks_count || 0)}</span>
+                    <span class="badge">${renderIcon('check-square', { size: 13 })} ${escapeHtml(tr('المهام المنجزة:', 'Completed Tasks:'))} ${Number(proj.tasks_completed_count || 0)}/${Number(proj.tasks_count || 0)}</span>
                     ${(proj.technologies || [])
-                      .map((t) => `<span class="badge badge-brand">${escapeHtml(t.name)}</span>`)
+                      .map((tech) => `<span class="badge badge-brand">${escapeHtml(tech.name)}</span>`)
                       .join('')}
                   </div>
                   <div class="card-footer">
-                    <a href="#/app/teams/${proj.team_id}" class="btn btn-sm btn-outline">الفريق #${proj.team_id}</a>
-                    <a href="#/app/projects/${proj.id}" class="btn btn-sm btn-primary">فتح مساحة المشروع وكانبان (P11)</a>
+                    <a href="#/app/teams/${proj.team_id}" class="btn btn-sm btn-outline">${renderIcon('users', { size: 14 })} <span>${escapeHtml(tr('الفريق', 'Team'))} #${proj.team_id}</span></a>
+                    <a href="#/app/projects/${proj.id}" class="btn btn-sm btn-primary"><span>${escapeHtml(tr('فتح مساحة المشروع وكانبان (P11)', 'Open Project & Kanban (P11)'))}</span> ${renderIcon('arrow-right', { size: 14 })}</a>
                   </div>
                 </article>
               `
@@ -225,10 +229,13 @@ export async function mountProjectsExplorerPage({ container, scope, router, isSt
         btn.disabled = true;
         try {
           await projectsService.update(pid, { is_active: false }, { is_active: true });
-          ui.toast(`تمت إعادة تفعيل المشروع #${pid} بنجاح (E29).`, 'success');
+          ui.toast(
+            tr(`تمت إعادة تفعيل المشروع #${pid} بنجاح (E29).`, `Project #${pid} reactivated successfully (E29).`),
+            'success'
+          );
           loadExplorer();
         } catch (err) {
-          ui.toast(err.message || 'تعذر إعادة تفعيل المشروع.', 'error');
+          ui.toast(err.message || tr('تعذر إعادة تفعيل المشروع.', 'Failed to reactivate project.'), 'error');
           btn.disabled = false;
         }
       });
@@ -292,7 +299,9 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
   let tableOffset = 0;
 
   const loadWorkspace = async () => {
-    container.innerHTML = ui.renderLoadingSkeleton(`جاري تحميل مساحة عمل المشروع #${projectId} (E28)...`);
+    container.innerHTML = ui.renderLoadingSkeleton(
+      tr(`جاري تحميل مساحة عمل المشروع #${projectId} (E28)...`, `Loading project workspace #${projectId} (E28)...`)
+    );
 
     let project = null;
     try {
@@ -301,11 +310,11 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
       if (isStale()) return;
       container.innerHTML = `
         <div class="card">
-          <h3>تعذر قراءة المشروع #${projectId}: ${escapeHtml(err.message)}</h3>
-          <p>إذا كان هذا المشروع معطلاً (Inactive)، يمكن لقائد الفريق أو مدير النظام استعادته عبر العملية E29.</p>
+          <h3>${escapeHtml(tr(`تعذر قراءة المشروع #${projectId}: ${err.message}`, `Unable to read project #${projectId}: ${err.message}`))}</h3>
+          <p>${escapeHtml(tr('إذا كان هذا المشروع معطلاً (Inactive)، يمكن لقائد الفريق أو مدير النظام استعادته عبر العملية E29.', 'If this project is deactivated (Inactive), the Team Admin or Super Admin can restore it via E29.'))}</p>
           <div class="page-header-actions">
-            <button type="button" id="emergency-reactivate-project-btn" class="btn btn-primary">إعادة تفعيل المشروع #${projectId} (E29)</button>
-            <a href="#/app/projects" class="btn btn-outline">العودة لمستكشف المشاريع</a>
+            <button type="button" id="emergency-reactivate-project-btn" class="btn btn-primary">${renderIcon('refresh-cw', { size: 15 })} <span>${escapeHtml(tr(`إعادة تفعيل المشروع #${projectId} (E29)`, `Reactivate Project #${projectId} (E29)`))}</span></button>
+            <a href="#/app/projects" class="btn btn-outline">${renderIcon('arrow-left', { size: 15 })} <span>${escapeHtml(tr('العودة لمستكشف المشاريع', 'Back to Projects Explorer'))}</span></a>
           </div>
         </div>
       `;
@@ -315,10 +324,10 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
           reactBtn.disabled = true;
           try {
             await projectsService.update(projectId, { is_active: false }, { is_active: true });
-            ui.toast('تمت إعادة تفعيل المشروع بنجاح (E29).', 'success');
+            ui.toast(tr('تمت إعادة تفعيل المشروع بنجاح (E29).', 'Project reactivated successfully (E29).'), 'success');
             loadWorkspace();
           } catch (reErr) {
-            ui.toast(reErr.message || 'تعذر إعادة التفعيل.', 'error');
+            ui.toast(reErr.message || tr('تعذر إعادة التفعيل.', 'Failed to reactivate.'), 'error');
             reactBtn.disabled = false;
           }
         });
@@ -360,8 +369,8 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <div class="page-header-actions" style="margin-bottom:0.4rem;">
-            <a href="#/app/teams/${teamId}" class="btn btn-sm btn-outline">→ الفريق #${teamId}</a>
+          <div class="page-header-actions" style="margin-block-end:0.4rem;">
+            <a href="#/app/teams/${teamId}" class="btn btn-sm btn-outline">${renderIcon('arrow-left', { size: 14 })} <span>${escapeHtml(tr('الفريق', 'Team'))} #${teamId}</span></a>
             <span class="badge mono">#${project.id} (${escapeHtml(project.slug)})</span>
             ${ui.renderBadge('ProjectStatus', project.status)}
             ${ui.renderBadge('ProjectVisibility', project.visibility)}
@@ -374,14 +383,14 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
         <div class="page-header-actions">
           ${
             canCreateTask
-              ? `<button type="button" id="proj-create-task-btn" class="btn btn-primary">+ مهمة جديدة (E31)</button>`
+              ? `<button type="button" id="proj-create-task-btn" class="btn btn-primary">${renderIcon('plus', { size: 15 })} <span>${escapeHtml(tr('مهمة جديدة (E31)', 'New Task (E31)'))}</span></button>`
               : ''
           }
           ${
             canManageProject
               ? project.is_active
-                ? `<button type="button" id="proj-deactivate-btn" class="btn btn-danger">تعطيل المشروع (E30)</button>`
-                : `<button type="button" id="proj-reactivate-btn" class="btn btn-success">إعادة تفعيل المشروع (E29)</button>`
+                ? `<button type="button" id="proj-deactivate-btn" class="btn btn-danger">${renderIcon('trash-2', { size: 15 })} <span>${escapeHtml(tr('تعطيل المشروع (E30)', 'Deactivate Project (E30)'))}</span></button>`
+                : `<button type="button" id="proj-reactivate-btn" class="btn btn-success">${renderIcon('refresh-cw', { size: 15 })} <span>${escapeHtml(tr('إعادة تفعيل المشروع (E29)', 'Reactivate Project (E29)'))}</span></button>`
               : ''
           }
         </div>
@@ -389,15 +398,15 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
 
       <div class="tabs-nav">
         <button type="button" class="tab-btn ${activeTab === 'kanban' ? 'is-active' : ''}" data-proj-tab="kanban">
-          لوحة كانبان التفاعلية (E33 & E38)
+          ${renderIcon('folder-kanban', { size: 15 })} <span>${escapeHtml(tr('لوحة كانبان التفاعلية (E33 & E38)', 'Interactive Kanban Board (E33 & E38)'))}</span>
         </button>
         <button type="button" class="tab-btn ${activeTab === 'table' ? 'is-active' : ''}" data-proj-tab="table">
-          جدول المهام المرقّم (${tasksTablePage.total}) — E32
+          ${renderIcon('check-square', { size: 15 })} <span>${escapeHtml(tr(`جدول المهام المرقّم (${tasksTablePage.total}) — E32`, `Paginated Tasks Table (${tasksTablePage.total}) — E32`))}</span>
         </button>
         ${
           canManageProject
             ? `<button type="button" class="tab-btn ${activeTab === 'settings' ? 'is-active' : ''}" data-proj-tab="settings">
-                إعدادات المشروع وحوكمة المعرض (E29)
+                ${renderIcon('settings', { size: 15 })} <span>${escapeHtml(tr('إعدادات المشروع وحوكمة المعرض (E29)', 'Project Settings & Showcase Governance (E29)'))}</span>
               </button>`
             : ''
         }
@@ -406,11 +415,11 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
       <!-- TAB 1: Kanban Board (E33 & E38) -->
       <div id="proj-tab-kanban" class="${activeTab === 'kanban' ? '' : 'hidden'}">
         <div class="filter-bar">
-          <div class="page-header-actions" style="width:100%;justify-content:space-between;">
-            <span>اسحب البطاقات بين الأعمدة أو استخدم قائمة <strong>النقل السريع (E38)</strong> الوصولية لكل بطاقة.</span>
+          <div class="page-header-actions" style="inline-size:100%;justify-content:space-between;">
+            <span>${escapeHtml(tr('اسحب البطاقات بين الأعمدة أو استخدم قائمة النقل السريع (E38) الوصولية لكل بطاقة.', 'Drag cards across columns or use the accessible Quick Move (E38) menu on each card.'))}</span>
             <label class="checkbox-row">
               <input type="checkbox" id="toggle-archived-col" ${showArchivedColumn ? 'checked' : ''} />
-              <span>إظهار عمود المهام المؤرشفة (archived)</span>
+              <span>${escapeHtml(tr('إظهار عمود المهام المؤرشفة (archived)', 'Show Archived Column (archived)'))}</span>
             </label>
           </div>
         </div>
@@ -428,7 +437,7 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                   <div class="kanban-task-list" data-kanban-dropzone="${colStatus}">
                     ${
                       colTasks.length === 0
-                        ? `<div class="field-hint" style="text-align:center;padding:1.5rem 0;">لا توجد مهام في هذا العمود</div>`
+                        ? `<div class="field-hint" style="text-align:center;padding-block:1.5rem;">${escapeHtml(tr('لا توجد مهام في هذا العمود', 'No tasks in this column'))}</div>`
                         : colTasks
                             .map((task) => {
                               const canMoveThis = capabilities.canModifyOrMoveTask(
@@ -436,6 +445,14 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                                 teamId,
                                 task
                               );
+                              const hasAssignee = Boolean(
+                                task.assignee_to_id || task.assignee_name || task.assignee_username
+                              );
+                              const assigneeObj = {
+                                name: task.assignee_name || task.assignee_username || '?',
+                                username: task.assignee_username,
+                                avatar_url: task.assignee_avatar_url,
+                              };
                               return `
                                 <article class="kanban-card" draggable="${canMoveThis ? 'true' : 'false'}" data-task-card="${task.id}" data-task-status="${task.status}">
                                   <div class="card-header">
@@ -444,20 +461,23 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                                   </div>
                                   <div class="page-header-actions">
                                     <span class="field-hint mono">#${task.id} | Pos: ${Number(task.position || 0)}</span>
-                                    <span class="badge">${escapeHtml(task.assignee_name || task.assignee_username || 'غير مسندة')}</span>
-                                    <span class="badge">💬 ${Number(task.comments_count || 0)}</span>
+                                    <span class="badge">
+                                      ${hasAssignee ? renderAvatar(assigneeObj, { size: 'xs' }) : ''}
+                                      <span>${escapeHtml(task.assignee_name || task.assignee_username || t('common.unassigned'))}</span>
+                                    </span>
+                                    <span class="badge">${renderIcon('message-square', { size: 12 })} ${Number(task.comments_count || 0)}</span>
                                   </div>
-                                  <div class="card-footer" style="padding-top:0.5rem;">
-                                    <button type="button" class="btn btn-sm btn-primary" data-open-task-drawer="${task.id}">التفاصيل (E35)</button>
+                                  <div class="card-footer" style="padding-block-start:0.5rem;">
+                                    <button type="button" class="btn btn-sm btn-primary" data-open-task-drawer="${task.id}">${renderIcon('eye', { size: 13 })} <span>${escapeHtml(tr('التفاصيل (E35)', 'Details (E35)'))}</span></button>
                                     ${
                                       canMoveThis
-                                        ? `<select class="form-control" style="width:auto;padding:0.2rem 0.4rem;font-size:var(--text-xs);" data-quick-move-task="${task.id}" aria-label="نقل سريع للمهمة">
-                                            <option value="">نقل سريع (E38)...</option>
+                                        ? `<select class="form-control" style="inline-size:auto;padding-block:0.2rem;padding-inline:0.4rem;font-size:var(--text-xs);" data-quick-move-task="${task.id}" aria-label="${escapeHtml(tr('نقل سريع للمهمة', 'Quick move task'))}">
+                                            <option value="">${escapeHtml(tr('نقل سريع (E38)...', 'Quick Move (E38)...'))}</option>
                                             ${Object.values(TaskStatus)
                                               .filter((st) => st !== task.status)
                                               .map(
                                                 (st) =>
-                                                  `<option value="${st}">→ ${escapeHtml(
+                                                  `<option value="${st}">${escapeHtml(
                                                     formatEnumLabel('TaskStatus', st)
                                                   )}</option>`
                                               )
@@ -482,10 +502,10 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
       <!-- TAB 2: Tasks Table View (E32) -->
       <div id="proj-tab-table" class="${activeTab === 'table' ? '' : 'hidden'}">
         <div class="filter-bar">
-          <div class="form-group" style="min-width:14rem;">
-            <label class="form-label" for="table-task-status-filter">تصفية جدول المهام حسب الحالة (E32 status)</label>
+          <div class="form-group">
+            <label class="form-label" for="table-task-status-filter">${escapeHtml(tr('تصفية جدول المهام حسب الحالة (E32 status)', 'Filter Tasks Table by Status (E32 status)'))}</label>
             <select id="table-task-status-filter" class="form-control">
-              ${renderEnumSelect(TaskStatus, 'TaskStatus', tableStatusFilter, 'كل الحالات')}
+              ${renderEnumSelect(TaskStatus, 'TaskStatus', tableStatusFilter, tr('كل الحالات', 'All Statuses'))}
             </select>
           </div>
         </div>
@@ -495,33 +515,46 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
             <thead>
               <tr>
                 <th>#</th>
-                <th>العنوان</th>
-                <th>الحالة</th>
-                <th>الأولوية</th>
-                <th>المسند إليه</th>
-                <th>الموعد النهائي</th>
-                <th>الترتيب</th>
-                <th>إجراءات</th>
+                <th>${escapeHtml(tr('العنوان', 'Title'))}</th>
+                <th>${escapeHtml(tr('الحالة', 'Status'))}</th>
+                <th>${escapeHtml(tr('الأولوية', 'Priority'))}</th>
+                <th>${escapeHtml(tr('المسند إليه', 'Assignee'))}</th>
+                <th>${escapeHtml(tr('الموعد النهائي', 'Deadline'))}</th>
+                <th>${escapeHtml(tr('الترتيب', 'Position'))}</th>
+                <th>${escapeHtml(tr('إجراءات', 'Actions'))}</th>
               </tr>
             </thead>
             <tbody>
               ${tasksTablePage.items
-                .map(
-                  (t) => `
-                <tr>
-                  <td class="mono">#${t.id}</td>
-                  <td><strong>${escapeHtml(t.title)}</strong></td>
-                  <td>${ui.renderBadge('TaskStatus', t.status)}</td>
-                  <td>${ui.renderBadge('TaskPriority', t.priority)}</td>
-                  <td>${escapeHtml(t.assignee_name || t.assignee_username || 'غير مسندة')}</td>
-                  <td>${ui.formatDateTime(t.deadline)}</td>
-                  <td class="mono">${Number(t.position || 0)}</td>
-                  <td>
-                    <button type="button" class="btn btn-sm btn-primary" data-open-task-drawer="${t.id}">فتح الدرج (E35)</button>
-                  </td>
-                </tr>
-              `
-                )
+                .map((task) => {
+                  const hasAssignee = Boolean(
+                    task.assignee_to_id || task.assignee_name || task.assignee_username
+                  );
+                  const assigneeObj = {
+                    name: task.assignee_name || task.assignee_username || '?',
+                    username: task.assignee_username,
+                    avatar_url: task.assignee_avatar_url,
+                  };
+                  return `
+                    <tr>
+                      <td class="mono">#${task.id}</td>
+                      <td><strong>${escapeHtml(task.title)}</strong></td>
+                      <td>${ui.renderBadge('TaskStatus', task.status)}</td>
+                      <td>${ui.renderBadge('TaskPriority', task.priority)}</td>
+                      <td>
+                        <div class="avatar-row">
+                          ${hasAssignee ? renderAvatar(assigneeObj, { size: 'xs' }) : ''}
+                          <span>${escapeHtml(task.assignee_name || task.assignee_username || t('common.unassigned'))}</span>
+                        </div>
+                      </td>
+                      <td>${ui.formatDateTime(task.deadline)}</td>
+                      <td class="mono">${Number(task.position || 0)}</td>
+                      <td>
+                        <button type="button" class="btn btn-sm btn-primary" data-open-task-drawer="${task.id}">${renderIcon('eye', { size: 14 })} <span>${escapeHtml(tr('فتح الدرج (E35)', 'Open Drawer (E35)'))}</span></button>
+                      </td>
+                    </tr>
+                  `;
+                })
                 .join('')}
             </tbody>
           </table>
@@ -536,24 +569,24 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
               <form id="update-project-settings-form" class="card">
                 <div class="card-header">
                   <div>
-                    <h3>تعديل إعدادات المشروع وترشيح المعرض (E29 — UpdateProjectRequest)</h3>
-                    <p class="field-hint">ملاحظة حوكمة RBAC-01: يمكن لقائد الفريق ترشيح المشروع إلى <code>pending_review</code>، بينما يعتمد مدير النظام الأعلى النشر إلى <code>public</code>.</p>
+                    <h3>${escapeHtml(tr('تعديل إعدادات المشروع وترشيح المعرض (E29 — UpdateProjectRequest)', 'Update Project Settings & Showcase Nomination (E29 — UpdateProjectRequest)'))}</h3>
+                    <p class="field-hint">${escapeHtml(tr('ملاحظة حوكمة RBAC-01: يمكن لقائد الفريق ترشيح المشروع إلى pending_review، بينما يعتمد مدير النظام الأعلى النشر إلى public.', 'RBAC-01 Governance Note: Team Admins can nominate projects to pending_review, while Super Admins approve publication to public.'))}</p>
                   </div>
                 </div>
 
                 <div class="form-grid">
                   <div class="form-group">
-                    <label class="form-label" for="up-title">عنوان المشروع (title) *</label>
+                    <label class="form-label" for="up-title">${escapeHtml(tr('عنوان المشروع (title) *', 'Project Title (title) *'))}</label>
                     <input id="up-title" name="title" type="text" class="form-control" required minlength="2" maxlength="150" value="${escapeHtml(project.title)}" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="up-status">حالة المشروع (status) *</label>
+                    <label class="form-label" for="up-status">${escapeHtml(tr('حالة المشروع (status) *', 'Project Status (status) *'))}</label>
                     <select id="up-status" name="status" class="form-control" required>
                       ${renderEnumSelect(ProjectStatus, 'ProjectStatus', project.status)}
                     </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="up-visibility">مستوى الظهور (visibility) *</label>
+                    <label class="form-label" for="up-visibility">${escapeHtml(tr('مستوى الظهور (visibility) *', 'Visibility Level (visibility) *'))}</label>
                     <select id="up-visibility" name="visibility" class="form-control" required>
                       ${Array.from(new Set([...allowedVisibilities, project.visibility]))
                         .map(
@@ -566,33 +599,33 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                     </select>
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="up-demo-url">رابط المعاينة (demo_url)</label>
+                    <label class="form-label" for="up-demo-url">${escapeHtml(tr('رابط المعاينة (demo_url)', 'Demo URL (demo_url)'))}</label>
                     <input id="up-demo-url" name="demo_url" type="url" class="form-control" value="${escapeHtml(project.demo_url || '')}" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="up-repo-url">رابط المستودع (repo_url)</label>
+                    <label class="form-label" for="up-repo-url">${escapeHtml(tr('رابط المستودع (repo_url)', 'Repository URL (repo_url)'))}</label>
                     <input id="up-repo-url" name="repo_url" type="url" class="form-control" value="${escapeHtml(project.repo_url || '')}" />
                   </div>
                   <div class="form-group">
-                    <label class="form-label" for="up-deadline">الموعد النهائي (deadline)</label>
+                    <label class="form-label" for="up-deadline">${escapeHtml(tr('الموعد النهائي (deadline)', 'Deadline (deadline)'))}</label>
                     <input id="up-deadline" name="deadline" type="datetime-local" class="form-control" value="${escapeHtml(toDateTimeLocalInputValue(project.deadline))}" />
                   </div>
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="up-short-desc">الوصف المختصر (short_description) *</label>
+                  <label class="form-label" for="up-short-desc">${escapeHtml(tr('الوصف المختصر (short_description) *', 'Short Description (short_description) *'))}</label>
                   <input id="up-short-desc" name="short_description" type="text" class="form-control" required minlength="5" maxlength="500" value="${escapeHtml(project.short_description)}" />
                 </div>
 
                 <div class="form-group">
-                  <label class="form-label" for="up-desc">الوصف التفصيلي الكامل (description)</label>
+                  <label class="form-label" for="up-desc">${escapeHtml(tr('الوصف التفصيلي الكامل (description)', 'Full Detailed Description (description)'))}</label>
                   <textarea id="up-desc" name="description" rows="3" class="form-control" maxlength="5000">${escapeHtml(project.description || '')}</textarea>
                 </div>
 
                 <div class="form-group">
                   <div class="card-header">
-                    <label class="form-label">التقنيات المرتبطة بالمشروع (technology_ids — يدعم المسح [] والبحث E44)</label>
-                    <button type="button" id="up-clear-techs-btn" class="btn btn-sm btn-outline">مسح كافة التقنيات ([])</button>
+                    <label class="form-label">${escapeHtml(tr('التقنيات المرتبطة بالمشروع (technology_ids — يدعم المسح [] والبحث E44)', 'Linked Technologies (technology_ids — supports clearing [] and E44 search)'))}</label>
+                    <button type="button" id="up-clear-techs-btn" class="btn btn-sm btn-outline">${renderIcon('x', { size: 13 })} <span>${escapeHtml(tr('مسح كافة التقنيات ([])', 'Clear All Technologies ([])'))}</span></button>
                   </div>
                   <div id="up-tech-chips-box" class="tech-chips-list"></div>
                 </div>
@@ -600,12 +633,12 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                 <div class="form-group">
                   <label class="checkbox-row">
                     <input type="checkbox" name="is_active" ${project.is_active ? 'checked' : ''} />
-                    <span>المشروع نشط (is_active)</span>
+                    <span>${escapeHtml(tr('المشروع نشط (is_active)', 'Project is active (is_active)'))}</span>
                   </label>
                 </div>
 
                 <div class="card-footer">
-                  <button type="submit" class="btn btn-primary">حفظ إعدادات المشروع (E29)</button>
+                  <button type="submit" class="btn btn-primary">${renderIcon('check', { size: 15 })} <span>${escapeHtml(tr('حفظ إعدادات المشروع (E29)', 'Save Project Settings (E29)'))}</span></button>
                 </div>
               </form>
             </div>`
@@ -660,7 +693,7 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
           ...tasksTablePage.items,
           ...Object.values(kanbanData?.columns || {}).flat(),
         ];
-        const foundTask = allTasks.find((t) => Number(t.id) === tid) || { id: tid };
+        const foundTask = allTasks.find((task) => Number(task.id) === tid) || { id: tid };
         openTaskDetailDrawer({
           taskId: tid,
           teamMembers: membersPage.items || [],
@@ -683,10 +716,16 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
         selectEl.disabled = true;
         try {
           await tasksService.move(tid, { status: targetStatus, position: nextPosition });
-          ui.toast(`تم نقل المهمة #${tid} إلى ${formatEnumLabel('TaskStatus', targetStatus)} (E38).`, 'success');
+          ui.toast(
+            tr(
+              `تم نقل المهمة #${tid} إلى ${formatEnumLabel('TaskStatus', targetStatus)} (E38).`,
+              `Moved task #${tid} to ${formatEnumLabel('TaskStatus', targetStatus)} (E38).`
+            ),
+            'success'
+          );
           loadWorkspace();
         } catch (err) {
-          ui.toast(err.message || 'تعذر نقل المهمة.', 'error');
+          ui.toast(err.message || tr('تعذر نقل المهمة.', 'Failed to move task.'), 'error');
           selectEl.disabled = false;
         }
       });
@@ -721,10 +760,16 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
             status: targetStatus,
             position: nextPosition,
           });
-          ui.toast(`تم إفلات المهمة #${draggedTaskId} وتحديث موضعها (E38).`, 'success');
+          ui.toast(
+            tr(
+              `تم إفلات المهمة #${draggedTaskId} وتحديث موضعها (E38).`,
+              `Dropped task #${draggedTaskId} and updated position (E38).`
+            ),
+            'success'
+          );
           loadWorkspace();
         } catch (err) {
-          ui.toast(err.message || 'تعذر نقل المهمة.', 'error');
+          ui.toast(err.message || tr('تعذر نقل المهمة.', 'Failed to move task.'), 'error');
         } finally {
           draggedTaskId = null;
         }
@@ -736,56 +781,56 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
     if (createTaskBtn) {
       createTaskBtn.addEventListener('click', () => {
         ui.openModal({
-          title: 'إضافة مهمة هندسية جديدة (E31 — CreateTaskRequest)',
+          title: tr('إضافة مهمة هندسية جديدة (E31 — CreateTaskRequest)', 'Create New Engineering Task (E31 — CreateTaskRequest)'),
           bodyHtml: `
             <form id="create-task-modal-form" novalidate>
               <div class="form-grid">
                 <div class="form-group">
-                  <label class="form-label" for="nt-title">عنوان المهمة (title) *</label>
-                  <input id="nt-title" name="title" type="text" class="form-control" required minlength="2" maxlength="200" placeholder="مثال: بناء نقطة نهاية التصدير" />
+                  <label class="form-label" for="nt-title">${escapeHtml(tr('عنوان المهمة (title) *', 'Task Title (title) *'))}</label>
+                  <input id="nt-title" name="title" type="text" class="form-control" required minlength="2" maxlength="200" placeholder="${escapeHtml(tr('مثال: بناء نقطة نهاية التصدير', 'e.g., Build export endpoint'))}" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="nt-status">العمود الأولي (status)</label>
+                  <label class="form-label" for="nt-status">${escapeHtml(tr('العمود الأولي (status)', 'Initial Column (status)'))}</label>
                   <select id="nt-status" name="status" class="form-control">
                     ${renderEnumSelect(TaskStatus, 'TaskStatus', TaskStatus.TODO)}
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="nt-priority">الأولوية (priority)</label>
+                  <label class="form-label" for="nt-priority">${escapeHtml(tr('الأولوية (priority)', 'Priority (priority)'))}</label>
                   <select id="nt-priority" name="priority" class="form-control">
                     ${renderEnumSelect(TaskPriority, 'TaskPriority', TaskPriority.MEDIUM)}
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="nt-position">الموضع الرقمي الاختياري (position >= 0)</label>
-                  <input id="nt-position" name="position" type="number" min="0" step="100" class="form-control" placeholder="تلقائي (1000.0 increments)" />
+                  <label class="form-label" for="nt-position">${escapeHtml(tr('الموضع الرقمي الاختياري (position >= 0)', 'Optional Position (position >= 0)'))}</label>
+                  <input id="nt-position" name="position" type="number" min="0" step="100" class="form-control" placeholder="Auto (1000.0 increments)" />
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="nt-assignee">إسناد إلى عضو الفريق (assignee_to_id)</label>
+                  <label class="form-label" for="nt-assignee">${escapeHtml(tr('إسناد إلى عضو الفريق (assignee_to_id)', 'Assign to Team Member (assignee_to_id)'))}</label>
                   <select id="nt-assignee" name="assignee_to_id" class="form-control">
-                    <option value="">— غير مسندة حالياً —</option>
+                    <option value="">${escapeHtml(tr('— غير مسندة حالياً —', '— Unassigned —'))}</option>
                     ${(membersPage.items || [])
                       .map(
                         (m) =>
                           `<option value="${m.member_id}">${escapeHtml(
                             m.name || m.username || `#${m.member_id}`
-                          )} (${escapeHtml(m.role)})</option>`
+                          )} (${escapeHtml(formatEnumLabel('TeamRole', m.role))})</option>`
                       )
                       .join('')}
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="nt-deadline">الموعد النهائي (deadline)</label>
+                  <label class="form-label" for="nt-deadline">${escapeHtml(tr('الموعد النهائي (deadline)', 'Deadline (deadline)'))}</label>
                   <input id="nt-deadline" name="deadline" type="datetime-local" class="form-control" />
                 </div>
               </div>
-              <div class="form-group" style="margin-top:0.85rem;">
-                <label class="form-label" for="nt-desc">الوصف الفني للمهمة (description)</label>
+              <div class="form-group" style="margin-block-start:0.85rem;">
+                <label class="form-label" for="nt-desc">${escapeHtml(tr('الوصف الفني للمهمة (description)', 'Technical Description (description)'))}</label>
                 <textarea id="nt-desc" name="description" rows="3" class="form-control" maxlength="5000"></textarea>
               </div>
-              <div class="modal-footer" style="margin-top:1rem;padding:0;border:none;background:transparent;">
-                <button type="button" class="btn btn-outline" data-close-modal="true">إلغاء</button>
-                <button type="submit" id="nt-submit-btn" class="btn btn-primary">إنشاء المهمة (E31)</button>
+              <div class="modal-footer" style="margin-block-start:1rem;padding:0;border:none;background:transparent;">
+                <button type="button" class="btn btn-outline" data-close-modal="true">${escapeHtml(t('common.cancel'))}</button>
+                <button type="submit" id="nt-submit-btn" class="btn btn-primary">${renderIcon('plus', { size: 15 })} <span>${escapeHtml(tr('إنشاء المهمة (E31)', 'Create Task (E31)'))}</span></button>
               </div>
             </form>
           `,
@@ -810,11 +855,11 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
                 };
                 await tasksService.create(projectId, payload);
                 ui.closeModal();
-                ui.toast('تم إنشاء المهمة بنجاح (E31).', 'success');
+                ui.toast(tr('تم إنشاء المهمة بنجاح (E31).', 'Task created successfully (E31).'), 'success');
                 loadWorkspace();
               } catch (err) {
                 ui.applyFieldErrors(form, err.fieldErrors);
-                ui.toast(err.message || 'تعذر إنشاء المهمة.', 'error');
+                ui.toast(err.message || tr('تعذر إنشاء المهمة.', 'Failed to create task.'), 'error');
                 btn.disabled = false;
               }
             });
@@ -830,10 +875,16 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
         deactProjBtn.disabled = true;
         try {
           await projectsService.deactivate(project);
-          ui.toast(`تم تعطيل المشروع "${project.title}" وتسجيله للاستعادة (E30).`, 'warning');
+          ui.toast(
+            tr(
+              `تم تعطيل المشروع "${project.title}" وتسجيله للاستعادة (E30).`,
+              `Project "${project.title}" deactivated and added to recovery list (E30).`
+            ),
+            'warning'
+          );
           router.navigate('#/app/projects');
         } catch (err) {
-          ui.toast(err.message || 'تعذر تعطيل المشروع.', 'error');
+          ui.toast(err.message || tr('تعذر تعطيل المشروع.', 'Failed to deactivate project.'), 'error');
           deactProjBtn.disabled = false;
         }
       });
@@ -846,10 +897,10 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
         reactProjBtn.disabled = true;
         try {
           await projectsService.update(projectId, project, { is_active: true });
-          ui.toast('تمت إعادة تفعيل المشروع بنجاح (E29).', 'success');
+          ui.toast(tr('تمت إعادة تفعيل المشروع بنجاح (E29).', 'Project reactivated successfully (E29).'), 'success');
           loadWorkspace();
         } catch (err) {
-          ui.toast(err.message || 'تعذر إعادة التفعيل.', 'error');
+          ui.toast(err.message || tr('تعذر إعادة التفعيل.', 'Failed to reactivate.'), 'error');
           reactProjBtn.disabled = false;
         }
       });
@@ -858,18 +909,18 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
     // Project Settings & Technology Picker (E29)
     const settingsForm = container.querySelector('#update-project-settings-form');
     if (settingsForm) {
-      const selectedTechs = new Set((project.technologies || []).map((t) => Number(t.id)));
+      const selectedTechs = new Set((project.technologies || []).map((tech) => Number(tech.id)));
       const chipsBox = settingsForm.querySelector('#up-tech-chips-box');
       const allTechs = techCatalogPage.items || [];
 
       const renderSettingsTechChips = () => {
         chipsBox.innerHTML = allTechs
-          .map((t) => {
-            const isSel = selectedTechs.has(Number(t.id));
+          .map((tech) => {
+            const isSel = selectedTechs.has(Number(tech.id));
             return `
-              <button type="button" class="tech-chip-option ${isSel ? 'is-selected' : ''}" data-up-tech="${t.id}">
-                <span>${isSel ? '✓' : '+'}</span>
-                <span>${escapeHtml(t.name)}</span>
+              <button type="button" class="tech-chip-option ${isSel ? 'is-selected' : ''}" data-up-tech="${tech.id}">
+                ${renderIcon(isSel ? 'check' : 'plus', { size: 13 })}
+                <span>${escapeHtml(tech.name)}</span>
               </button>
             `;
           })
@@ -907,11 +958,11 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
             technology_ids: Array.from(selectedTechs),
           };
           await projectsService.update(projectId, project, formValues);
-          ui.toast('تم حفظ إعدادات المشروع بنجاح (E29).', 'success');
+          ui.toast(tr('تم حفظ إعدادات المشروع بنجاح (E29).', 'Project settings saved successfully (E29).'), 'success');
           loadWorkspace();
         } catch (err) {
           ui.applyFieldErrors(settingsForm, err.fieldErrors);
-          ui.toast(err.message || 'تعذر حفظ إعدادات المشروع.', 'error');
+          ui.toast(err.message || tr('تعذر حفظ إعدادات المشروع.', 'Failed to save project settings.'), 'error');
         }
       });
     }
@@ -919,4 +970,3 @@ export async function mountProjectWorkspacePage({ container, params, scope, rout
 
   await loadWorkspace();
 }
-

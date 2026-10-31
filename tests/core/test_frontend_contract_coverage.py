@@ -10,6 +10,9 @@ Verifies:
 5. Registration of all 18 logical screens (P01–P18) in `static/js/app.js`.
 6. Anti-hallucination & architectural traps compliance (cross-tab mutex refresh, zero backdrop-filter,
    accessible static asset serving).
+7. 100% bilingual AR/EN locale key parity (`ar.js` vs `en.js`), instant RTL/LTR `i18n.js` engine,
+   CSS Logical Properties & Zero-Overflow containment (`min-inline-size: 0`), unified Lucide SVG icon
+   system (`stroke-width="1.75"`), and smart `avatar_url` renderer with automatic initials fallback.
 """
 
 from pathlib import Path
@@ -49,6 +52,36 @@ from src.modules.user.schemas import (
 )
 
 STATIC_ROOT = Path("static")
+
+
+def _extract_js_object_keys_paths(js_source: str) -> set[str]:
+    """Extracts dotted key paths from a structured ES module locale dictionary."""
+    lines = js_source.splitlines()
+    stack: list[str] = []
+    paths: set[str] = set()
+
+    open_block_re = re.compile(r"^\s*([a-zA-Z0-9_]+)\s*:\s*(?:Object\.freeze\()?\{\s*$")
+    leaf_re = re.compile(r"^\s*([a-zA-Z0-9_]+)\s*:\s*(['\"`]).*?\2\s*,?\s*$")
+    close_block_re = re.compile(r"^\s*\}\)?;?\s*,?\s*$")
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("//") or line.startswith("export const"):
+            continue
+        open_match = open_block_re.match(raw_line)
+        if open_match:
+            stack.append(open_match.group(1))
+            continue
+        leaf_match = leaf_re.match(raw_line)
+        if leaf_match:
+            key = leaf_match.group(1)
+            full_path = ".".join([*stack, key])
+            paths.add(full_path)
+            continue
+        if close_block_re.match(raw_line) and stack:
+            stack.pop()
+
+    return paths
 
 
 def test_57_openapi_endpoints_exact_parity_with_frontend_registry() -> None:
@@ -248,6 +281,137 @@ def test_18_logical_screens_and_architectural_traps_guardrails() -> None:
         assert "backdrop-filter" not in cleaned, f"Forbidden backdrop-filter found in {css_file}"
 
 
+def test_bilingual_locales_100_percent_key_parity_and_i18n_engine() -> None:
+    """Proves 100% recursive key parity between ar.js and en.js and verifies i18n.js & switcher UI."""
+    ar_js = (STATIC_ROOT / "js" / "contracts" / "locales" / "ar.js").read_text(encoding="utf-8")
+    en_js = (STATIC_ROOT / "js" / "contracts" / "locales" / "en.js").read_text(encoding="utf-8")
+
+    ar_keys = _extract_js_object_keys_paths(ar_js)
+    en_keys = _extract_js_object_keys_paths(en_js)
+
+    assert len(ar_keys) >= 120, f"Expected comprehensive locale dictionary, got {len(ar_keys)} keys"
+    assert ar_keys == en_keys, f"Locale key mismatch between ar.js and en.js: {ar_keys ^ en_keys}"
+
+    i18n_js = (STATIC_ROOT / "js" / "core" / "i18n.js").read_text(encoding="utf-8")
+    for required_symbol in (
+        "app_lang",
+        "syncDocumentDirection",
+        "toggleLanguage",
+        "onLanguageChange",
+        "captureActiveFormState",
+        "restoreActiveFormState",
+        "formatLocalizedDateTime",
+        "tEnum",
+        "export function tr(",
+    ):
+        assert required_symbol in i18n_js, f"Missing {required_symbol} in i18n.js"
+
+    index_html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    assert 'id="public-lang-toggle-btn"' in index_html
+    assert 'id="workspace-lang-toggle-btn"' in index_html
+
+
+def test_css_logical_properties_and_zero_overflow_containment() -> None:
+    """Proves strict CSS Logical Properties and zero physical directional properties across static/css/*.css."""
+    css_files = list((STATIC_ROOT / "css").glob("*.css"))
+    combined_css = ""
+    forbidden_physical_props = (
+        "margin-left:",
+        "margin-right:",
+        "padding-left:",
+        "padding-right:",
+        "border-left:",
+        "border-right:",
+        "text-align: left",
+        "text-align: right",
+        "text-align:left",
+        "text-align:right",
+    )
+
+    for css_file in css_files:
+        raw = css_file.read_text(encoding="utf-8")
+        cleaned = re.sub(r"/\*.*?\*/", "", raw, flags=re.DOTALL)
+        combined_css += "\n" + cleaned
+        for forbidden in forbidden_physical_props:
+            assert forbidden not in cleaned, f"Forbidden physical CSS property '{forbidden}' in {css_file.name}"
+
+    assert "min-inline-size: 0" in combined_css
+    assert "overflow-wrap: anywhere" in combined_css
+    assert "word-break: break-word" in combined_css
+    assert '[dir="rtl"] .icon-directional' in combined_css
+
+
+def test_unified_lucide_icon_system_and_smart_avatar_renderer() -> None:
+    """Proves unified Lucide SVG icon specs (stroke-width 1.75) and safe avatar_url fallback & live preview."""
+    icon_js = (STATIC_ROOT / "js" / "components" / "icon.js").read_text(encoding="utf-8")
+    assert 'viewBox="0 0 24 24"' in icon_js
+    assert 'stroke-width="1.75"' in icon_js
+    assert 'stroke-linecap="round"' in icon_js
+    assert 'stroke-linejoin="round"' in icon_js
+    assert "icon-directional" in icon_js
+
+    avatar_js = (STATIC_ROOT / "js" / "components" / "avatar.js").read_text(encoding="utf-8")
+    assert "isSafeHttpUrl" in avatar_js
+    assert "extractInitials" in avatar_js
+    assert "renderAvatar" in avatar_js
+    assert "initGlobalAvatarFallbackHandler" in avatar_js
+    assert "bindLiveAvatarPreview" in avatar_js
+    assert "parsed.protocol === 'http:' || parsed.protocol === 'https:'" in avatar_js
+
+    # Verify live avatar preview is wired in P06 (public-pages.js), P13 (workspace-home-pages.js), and P14 (admin-pages.js)
+    for page_name in ("public-pages.js", "workspace-home-pages.js", "admin-pages.js"):
+        page_src = (STATIC_ROOT / "js" / "pages" / page_name).read_text(encoding="utf-8")
+        assert "bindLiveAvatarPreview" in page_src, f"bindLiveAvatarPreview missing in {page_name}"
+        assert "renderAvatar" in page_src, f"renderAvatar missing in {page_name}"
+
+
+def test_zero_missing_i18n_keys_and_zero_missing_icons_across_entire_frontend() -> None:
+    """Proves every t('...'), titleKey, data-i18n*, renderIcon('...'), and data-nav-icon in static/ resolves cleanly."""
+    ar_js = (STATIC_ROOT / "js" / "contracts" / "locales" / "ar.js").read_text(encoding="utf-8")
+    en_js = (STATIC_ROOT / "js" / "contracts" / "locales" / "en.js").read_text(encoding="utf-8")
+    ar_keys = _extract_js_object_keys_paths(ar_js)
+    en_keys = _extract_js_object_keys_paths(en_js)
+
+    icon_js = (STATIC_ROOT / "js" / "components" / "icon.js").read_text(encoding="utf-8")
+    defined_icons = set(re.findall(r"(?:'([a-z0-9-]+)'|([a-z0-9_]+))\s*:\s*'<", icon_js))
+    icon_names = {a or b for a, b in defined_icons}
+
+    referenced_keys: set[tuple[str, str]] = set()
+    referenced_icons: set[tuple[str, str]] = set()
+
+    for file_path in list(STATIC_ROOT.rglob("*.js")) + list(STATIC_ROOT.rglob("*.html")):
+        text = file_path.read_text(encoding="utf-8")
+        for m in re.finditer(r"""\bt\(\s*['"]([a-zA-Z0-9_.]+)['"]""", text):
+            referenced_keys.add((file_path.name, m.group(1)))
+        for m in re.finditer(r"""titleKey:\s*['"]([a-zA-Z0-9_.]+)['"]""", text):
+            referenced_keys.add((file_path.name, m.group(1)))
+        for m in re.finditer(
+            r"""data-i18n(?:-[a-z-]+)?=['"]([a-zA-Z0-9_.]+)['"]""", text
+        ):
+            referenced_keys.add((file_path.name, m.group(1)))
+
+        for m in re.finditer(r"""renderIcon\(\s*['"]([a-z0-9-]+)['"]""", text):
+            referenced_icons.add((file_path.name, m.group(1)))
+        for m in re.finditer(
+            r"""renderIcon\(\s*[a-zA-Z0-9_.]+\s*\?\s*['"]([a-z0-9-]+)['"]\s*:\s*['"]([a-z0-9-]+)['"]""",
+            text,
+        ):
+            referenced_icons.add((file_path.name, m.group(1)))
+            referenced_icons.add((file_path.name, m.group(2)))
+        for m in re.finditer(r"""data-nav-icon=['"]([a-z0-9-]+)['"]""", text):
+            referenced_icons.add((file_path.name, m.group(1)))
+
+    missing_ar = [(fname, k) for fname, k in sorted(referenced_keys) if k not in ar_keys]
+    missing_en = [(fname, k) for fname, k in sorted(referenced_keys) if k not in en_keys]
+    missing_icons = [
+        (fname, ic) for fname, ic in sorted(referenced_icons) if ic not in icon_names
+    ]
+
+    assert not missing_ar, f"Missing Arabic translation keys in ar.js: {missing_ar}"
+    assert not missing_en, f"Missing English translation keys in en.js: {missing_en}"
+    assert not missing_icons, f"Missing SVG icons in icon.js: {missing_icons}"
+
+
 async def test_static_spa_assets_served_correctly(client: AsyncClient) -> None:
     """Proves FastAPI static mount serves index.html and modular ES/CSS files with 200 OK."""
     for asset_path in (
@@ -258,9 +422,13 @@ async def test_static_spa_assets_served_correctly(client: AsyncClient) -> None:
         "/js/app.js",
         "/js/contracts/endpoints.js",
         "/js/contracts/serializers.js",
+        "/js/contracts/locales/ar.js",
+        "/js/contracts/locales/en.js",
+        "/js/core/i18n.js",
         "/js/core/session.js",
         "/js/core/capabilities.js",
+        "/js/components/icon.js",
+        "/js/components/avatar.js",
     ):
         res = await client.get(asset_path)
         assert res.status_code == 200, f"Asset {asset_path} returned {res.status_code}"
-

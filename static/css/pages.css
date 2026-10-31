@@ -1,23 +1,28 @@
-/* static/css/pages.css — Kanban Board, Tabs, Tech Picker, Audit Diff & Diagnostics */
+/* static/css/pages.css — Contained Kanban Board, Tabs, Tech Picker, Audit Diff & Diagnostics */
 
 /* Tabs Bar */
 .tabs-nav {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 1.25rem;
+  border-block-end: 1px solid var(--border-subtle);
+  margin-block-end: 1.25rem;
   overflow-x: auto;
+  max-inline-size: 100%;
 }
 
 .tab-btn {
-  padding: 0.65rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-block: 0.65rem;
+  padding-inline: 1rem;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-block-end: 2px solid transparent;
   white-space: nowrap;
 }
 
@@ -27,17 +32,18 @@
 
 .tab-btn.is-active {
   color: var(--brand-primary);
-  border-bottom-color: var(--brand-primary);
+  border-block-end-color: var(--brand-primary);
 }
 
-/* Kanban Board */
+/* Kanban Board Containment */
 .kanban-board-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(17.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5rem), 1fr));
   gap: 1rem;
   align-items: start;
-  overflow-x: auto;
-  padding-bottom: 0.75rem;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  padding-block-end: 0.75rem;
 }
 
 .kanban-column {
@@ -45,10 +51,12 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 0.875rem;
-  min-height: 22rem;
+  min-block-size: 22rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .kanban-column.is-drag-over {
@@ -61,15 +69,16 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--border-strong);
+  padding-block-end: 0.5rem;
+  border-block-end: 1px solid var(--border-strong);
 }
 
 .kanban-task-list {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
-  min-height: 16rem;
+  min-block-size: 16rem;
+  min-inline-size: 0;
 }
 
 .kanban-card {
@@ -82,6 +91,8 @@
   flex-direction: column;
   gap: 0.55rem;
   cursor: grab;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 .kanban-card:active {
@@ -103,13 +114,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  inline-size: 100%;
+  max-inline-size: 100%;
 }
 
 .tech-chips-list {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  max-height: 11rem;
+  max-block-size: 11rem;
   overflow-y: auto;
 }
 
@@ -117,7 +130,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.65rem;
+  padding-block: 0.25rem;
+  padding-inline: 0.65rem;
   border-radius: 9999px;
   font-size: var(--text-xs);
   font-weight: 600;
@@ -132,7 +146,7 @@
   color: var(--brand-primary);
 }
 
-/* JSON Payload & Audit Viewer */
+/* JSON Payload & Audit Viewer (Scoped Inner Scroll) */
 .json-viewer {
   background-color: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
@@ -141,10 +155,12 @@
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--text-primary);
+  inline-size: 100%;
+  max-inline-size: 100%;
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 16rem;
+  max-block-size: 16rem;
 }
 
 /* Hero Banner (Public Portal) */
@@ -152,14 +168,17 @@
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
-  padding: clamp(1.75rem, 4vw, 3.25rem);
-  margin-bottom: 2rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  margin-block-end: 2rem;
   box-shadow: var(--shadow-xs);
+  inline-size: 100%;
+  max-inline-size: 100%;
 }
 
 /* Auth Centered Box */
 .auth-container {
-  max-width: 30rem;
-  margin: 2rem auto;
+  inline-size: 100%;
+  max-inline-size: 32rem;
+  margin-block: 1.5rem;
+  margin-inline: auto;
 }
-

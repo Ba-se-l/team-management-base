@@ -1,5 +1,8 @@
-// static/js/core/ui.js — Safe DOM Escaping, Accessible Modals, Drawers, Toasts & Pagination
+// static/js/core/ui.js — Safe DOM Escaping, Accessible Modals, Drawers, Toasts, Icons & Avatar
 import { formatEnumLabel, getBadgeVariantForValue } from '../contracts/enums.js';
+import { t, formatLocalizedDateTime } from './i18n.js';
+import { renderIcon } from '../components/icon.js';
+import { renderAvatar } from '../components/avatar.js';
 
 export function escapeHtml(value) {
   if (value === null || value === undefined) return '';
@@ -12,21 +15,14 @@ export function escapeHtml(value) {
 }
 
 export function formatDateTime(isoString) {
-  if (!isoString) return '—';
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) return escapeHtml(isoString);
-  return date.toLocaleString('ar-EG', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatLocalizedDateTime(isoString);
 }
 
 export const ui = {
   escapeHtml,
   formatDateTime,
+  icon: renderIcon,
+  avatar: renderAvatar,
 
   renderBadge(groupName, value) {
     if (value === null || value === undefined || value === '') return '<span class="badge">—</span>';
@@ -35,18 +31,21 @@ export const ui = {
     return `<span class="badge ${variant}">${escapeHtml(label)}</span>`;
   },
 
-  renderBooleanBadge(boolVal, trueLabel = 'نشط (Active)', falseLabel = 'معطل (Inactive)') {
+  renderBooleanBadge(boolVal, trueLabel = null, falseLabel = null) {
+    const activeText = trueLabel || t('common.active');
+    const inactiveText = falseLabel || t('common.inactive');
     return boolVal
-      ? `<span class="badge badge-success">${escapeHtml(trueLabel)}</span>`
-      : `<span class="badge badge-danger">${escapeHtml(falseLabel)}</span>`;
+      ? `<span class="badge badge-success">${renderIcon('check-circle-2', { size: 'sm' })} ${escapeHtml(activeText)}</span>`
+      : `<span class="badge badge-danger">${renderIcon('alert-circle', { size: 'sm' })} ${escapeHtml(inactiveText)}</span>`;
   },
 
-  renderLoadingSkeleton(message = 'جاري تحميل البيانات من الخادم...') {
+  renderLoadingSkeleton(message = null) {
+    const text = message || t('common.loading');
     return `
       <div class="card" aria-busy="true">
         <div class="page-header-actions">
-          <span class="badge badge-brand">يرجى الانتظار</span>
-          <strong>${escapeHtml(message)}</strong>
+          <span class="badge badge-brand">${renderIcon('refresh-cw', { size: 'sm' })} ${escapeHtml(t('common.pleaseWait'))}</span>
+          <strong>${escapeHtml(text)}</strong>
         </div>
       </div>
     `;
@@ -55,9 +54,10 @@ export const ui = {
   renderEmptyState(title, subtitle = '', actionHtml = '') {
     return `
       <div class="empty-state">
+        ${renderIcon('inbox', { size: 'lg' })}
         <h3>${escapeHtml(title)}</h3>
         ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ''}
-        ${actionHtml ? `<div style="margin-top:0.5rem;">${actionHtml}</div>` : ''}
+        ${actionHtml ? `<div style="margin-block-start:0.5rem;">${actionHtml}</div>` : ''}
       </div>
     `;
   },
@@ -65,12 +65,13 @@ export const ui = {
   renderErrorState(message, showRetry = true) {
     return `
       <div class="alert-banner alert-danger" role="alert">
-        <div>
-          <strong>تعذر إتمام العملية:</strong> ${escapeHtml(message)}
+        <div class="user-inline-cell">
+          ${renderIcon('alert-circle')}
+          <span><strong>${escapeHtml(t('common.errorPrefix'))}</strong> ${escapeHtml(message)}</span>
         </div>
         ${
           showRetry
-            ? `<button type="button" class="btn btn-sm btn-outline" data-action="retry-view">إعادة المحاولة</button>`
+            ? `<button type="button" class="btn btn-sm btn-outline" data-action="retry-view">${renderIcon('refresh-cw', { size: 'sm' })} ${escapeHtml(t('common.retry'))}</button>`
             : ''
         }
       </div>
@@ -110,15 +111,15 @@ export const ui = {
     return `
       <div class="pagination-bar" data-pagination="${escapeHtml(prefix)}">
         <div>
-          عرض <strong>${currentStart}–${currentEnd}</strong> من إجمالي <strong>${total}</strong> سجل
+          ${escapeHtml(t('common.paginationSummary', { start: currentStart, end: currentEnd, total }))}
         </div>
         <div class="page-header-actions">
           <button type="button" class="btn btn-sm btn-outline" data-page-dir="prev" ${
             hasPrev ? '' : 'disabled'
-          }>السابق</button>
+          }>${renderIcon('chevron-left', { size: 'sm' })} ${escapeHtml(t('common.prev'))}</button>
           <button type="button" class="btn btn-sm btn-outline" data-page-dir="next" ${
             hasMore ? '' : 'disabled'
-          }>التالي</button>
+          }>${escapeHtml(t('common.next'))} ${renderIcon('chevron-right', { size: 'sm' })}</button>
         </div>
       </div>
     `;
@@ -155,7 +156,9 @@ export const ui = {
     item.className = `toast-item toast-${type}`;
     item.innerHTML = `
       <div>${escapeHtml(message)}</div>
-      <button type="button" class="btn btn-sm btn-outline" aria-label="إغلاق التنبيه">✕</button>
+      <button type="button" class="btn btn-sm btn-outline" aria-label="${escapeHtml(t('common.close'))}">
+        ${renderIcon('x', { size: 'sm' })}
+      </button>
     `;
 
     const closeBtn = item.querySelector('button');
@@ -179,7 +182,9 @@ export const ui = {
         <div class="modal-dialog">
           <div class="modal-header">
             <h3>${escapeHtml(title)}</h3>
-            <button type="button" class="btn btn-sm btn-outline" data-close-modal="true" aria-label="إغلاق النافذة">✕</button>
+            <button type="button" class="btn btn-sm btn-outline" data-close-modal="true" aria-label="${escapeHtml(t('common.close'))}">
+              ${renderIcon('x', { size: 'sm' })}
+            </button>
           </div>
           <div class="modal-body">${bodyHtml}</div>
           ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}
@@ -213,7 +218,9 @@ export const ui = {
         <div class="drawer-panel">
           <div class="drawer-header">
             <h3>${escapeHtml(title)}</h3>
-            <button type="button" class="btn btn-sm btn-outline" data-close-drawer="true" aria-label="إغلاق الدرج">✕</button>
+            <button type="button" class="btn btn-sm btn-outline" data-close-drawer="true" aria-label="${escapeHtml(t('common.close'))}">
+              ${renderIcon('x', { size: 'sm' })}
+            </button>
           </div>
           <div class="drawer-body">${bodyHtml}</div>
           ${footerHtml ? `<div class="drawer-footer">${footerHtml}</div>` : ''}

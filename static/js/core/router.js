@@ -2,6 +2,7 @@
 import { store } from './store.js';
 import { capabilities } from './capabilities.js';
 import { createLifecycleScope } from './lifecycle.js';
+import { t } from './i18n.js';
 import { ui } from './ui.js';
 
 export class HashRouter {
@@ -55,15 +56,18 @@ export class HashRouter {
     return null;
   }
 
-  async resolve() {
+  async resolve(options = {}) {
+    const { preserveOverlays = false } = options;
     const navGen = ++this.navigationGeneration;
     if (this.currentScope) {
       this.currentScope.dispose();
       this.currentScope = null;
     }
 
-    ui.closeModal();
-    ui.closeDrawer();
+    if (!preserveOverlays) {
+      ui.closeModal();
+      ui.closeDrawer();
+    }
 
     const matched = this.matchRoute(window.location.hash || '#/');
     if (!matched) {
@@ -76,7 +80,7 @@ export class HashRouter {
 
     // Enforce Route Guards
     if (route.guard === 'auth' && !capabilities.isAuthenticated(state)) {
-      ui.toast('يرجى تسجيل الدخول للوصول إلى مساحة العمل الداخلية.', 'warning');
+      ui.toast(t('errors.guardAuth'), 'warning');
       this.navigate('#/login');
       return;
     }
@@ -88,7 +92,7 @@ export class HashRouter {
       if (!capabilities.isAuthenticated(state)) {
         this.navigate('#/login');
       } else {
-        ui.toast('هذه الشاشة مخصصة لمدير النظام الأعلى (Super Admin) فقط.', 'error');
+        ui.toast(t('errors.guardSuperAdmin'), 'error');
         this.navigate('#/app/dashboard');
       }
       return;
@@ -97,7 +101,7 @@ export class HashRouter {
       if (!capabilities.isAuthenticated(state)) {
         this.navigate('#/login');
       } else {
-        ui.toast('يتطلب الوصول إلى دليل المستخدمين صلاحية قائد فريق أو مدير نظام.', 'error');
+        ui.toast(t('errors.guardUserDirectory'), 'error');
         this.navigate('#/app/dashboard');
       }
       return;
@@ -130,12 +134,11 @@ export class HashRouter {
       }
       if (rootContainer) {
         rootContainer.innerHTML = ui.renderErrorState(
-          error?.message || 'حدث خطأ غير متوقع أثناء تحميل الشاشة.',
-          () => this.resolve()
+          error?.message || t('common.errorPrefix'),
+          true
         );
         ui.bindRetryButtons(rootContainer, () => this.resolve());
       }
     }
   }
 }
-

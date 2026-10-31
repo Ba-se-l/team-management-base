@@ -1,6 +1,7 @@
-// static/js/core/http.js — Unified HTTP Client (ApiError, 204/200, Retry-After, X-Request-ID)
+// static/js/core/http.js — Unified HTTP Client (ApiError, 204/200, Retry-After, X-Request-ID, Bilingual)
 import { sessionManager } from './session.js';
 import { store } from './store.js';
+import { t } from './i18n.js';
 
 export class ApiError extends Error {
   constructor({ status, code, message, detail, fieldErrors, requestId, retryAfter, endpoint }) {
@@ -22,14 +23,14 @@ function parseErrorPayload(status, payload, headers, endpointCode) {
   const retryAfter = retryAfterRaw ? Number(retryAfterRaw) || retryAfterRaw : null;
 
   const fieldErrors = {};
-  let message = `فشل الطلب برمز حالة HTTP ${status}`;
+  let message = t('errors.httpDefault', { status });
   let errorCode = `HTTP_${status}`;
 
   if (status === 429) {
     errorCode = 'RATE_LIMIT_EXCEEDED';
     message = retryAfter
-      ? `تم تجاوز حد الطلبات المسموح (429). يرجى الانتظار ${retryAfter} ثانية قبل إعادة المحاولة.`
-      : 'تم تجاوز حد الطلبات المسموح (429 Too Many Requests).';
+      ? t('errors.rateLimitWithRetry', { seconds: retryAfter })
+      : t('errors.rateLimitGeneric');
   } else if (payload && typeof payload === 'object') {
     if (payload.error && typeof payload.error === 'object') {
       errorCode = payload.error.code || errorCode;
@@ -37,16 +38,16 @@ function parseErrorPayload(status, payload, headers, endpointCode) {
       if (Array.isArray(payload.error.details)) {
         for (const item of payload.error.details) {
           const loc = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : item.field || 'form';
-          fieldErrors[String(loc)] = item.msg || item.message || 'قيمة غير صالحة';
+          fieldErrors[String(loc)] = item.msg || item.message || t('errors.validationGeneric');
         }
       }
     } else if (typeof payload.detail === 'string') {
       message = payload.detail;
     } else if (Array.isArray(payload.detail)) {
-      message = 'يرجى مراجعة الحقول المدخلة وتصحيح الأخطاء الموضحة.';
+      message = t('errors.validationGeneric');
       for (const item of payload.detail) {
         const loc = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : 'form';
-        fieldErrors[String(loc)] = item.msg || 'قيمة غير صالحة';
+        fieldErrors[String(loc)] = item.msg || t('errors.validationGeneric');
       }
     } else if (typeof payload.message === 'string') {
       message = payload.message;
@@ -147,7 +148,7 @@ export async function apiRequest(endpointSpec, options = {}) {
       throw new ApiError({
         status: 401,
         code: 'SESSION_EXPIRED',
-        message: 'انتهت صلاحية الجلسة، يرجى تسجيل الدخول مجدداً.',
+        message: t('errors.sessionExpired'),
         endpoint: endpointSpec.code,
       });
     }
@@ -166,4 +167,3 @@ export async function apiRequest(endpointSpec, options = {}) {
 
   return payload;
 }
-

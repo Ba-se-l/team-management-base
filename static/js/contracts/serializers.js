@@ -1,4 +1,5 @@
 // static/js/contracts/serializers.js — 19 Request Schemas (92 Fields) & Smart PATCH Builder
+import { t } from '../core/i18n.js';
 
 export const REQUEST_SCHEMAS = Object.freeze({
   // 1. CreateUserRequest (12 fields) — Used by E03 (/auth/register) & E09 (POST /users)
@@ -148,7 +149,6 @@ export const SCHEMA_NON_NULLABLE_FIELDS = Object.freeze({
   UpdateInquiryStatusRequest: new Set(['status']),
 });
 
-// Global union of non-nullable PATCH fields across all schemas
 export const NON_NULLABLE_PATCH_FIELDS = new Set([
   'name',
   'is_public_member',
@@ -187,7 +187,7 @@ export function toUtcIsoOrNull(localDateTimeValue) {
   }
   const date = new Date(localDateTimeValue);
   if (Number.isNaN(date.getTime())) {
-    throw new Error('صيغة التاريخ والوقت غير صالحة.');
+    throw new Error(t('errors.invalidDate'));
   }
   return date.toISOString();
 }
@@ -205,19 +205,11 @@ export function normalizeOptionalUrl(rawValue) {
   const trimmed = String(rawValue).trim();
   if (!trimmed) return null;
   if (!/^https?:\/\//i.test(trimmed)) {
-    throw new Error(`الرابط "${trimmed}" يجب أن يبدأ بـ http:// أو https://`);
+    throw new Error(t('errors.invalidUrl', { url: trimmed }));
   }
   return trimmed;
 }
 
-/**
- * Builds a dirty-only PATCH payload that strictly respects backend _NON_NULLABLE_FIELDS:
- * - Unchanged fields are omitted.
- * - Required/non-nullable fields NEVER send null (even if cleared in UI; Task description sends "" instead of null).
- * - Nullable fields send explicit `null` when cleared from a previously non-empty value.
- * - Array fields (e.g., technology_ids) send `[]` when cleared.
- * - Boolean fields preserve explicit `false`.
- */
 export function buildPatchPayload(originalData = {}, currentFormValues = {}, schemaName = null) {
   const payload = {};
   const schemaNonNullable =
@@ -228,7 +220,9 @@ export function buildPatchPayload(originalData = {}, currentFormValues = {}, sch
 
     if (Array.isArray(rawNext)) {
       const prevIds = Array.isArray(prevVal)
-        ? prevVal.map((item) => (typeof item === 'object' && item !== null ? Number(item.id) : Number(item))).sort((a, b) => a - b)
+        ? prevVal
+            .map((item) => (typeof item === 'object' && item !== null ? Number(item.id) : Number(item)))
+            .sort((a, b) => a - b)
         : [];
       const nextIds = rawNext.map(Number).sort((a, b) => a - b);
       if (JSON.stringify(prevIds) !== JSON.stringify(nextIds)) {
@@ -254,7 +248,6 @@ export function buildPatchPayload(originalData = {}, currentFormValues = {}, sch
     const isEmptyString = typeof rawNext === 'string' && rawNext.trim() === '';
 
     if (isEmptyString || rawNext === null || rawNext === undefined) {
-      // Special case: UpdateTaskRequest.description is non-nullable string (default ""), not Optional[str]
       if (schemaName === 'UpdateTaskRequest' && key === 'description') {
         if ((prevVal || '') !== '') {
           payload.description = '';
@@ -278,4 +271,3 @@ export function buildPatchPayload(originalData = {}, currentFormValues = {}, sch
 
   return payload;
 }
-

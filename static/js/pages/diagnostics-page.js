@@ -3,6 +3,8 @@ import { ENDPOINTS } from '../contracts/endpoints.js';
 import { REQUEST_SCHEMAS } from '../contracts/serializers.js';
 import { store } from '../core/store.js';
 import { ui, escapeHtml } from '../core/ui.js';
+import { tr } from '../core/i18n.js';
+import { renderIcon } from '../components/icon.js';
 import { healthService } from '../services/health.js';
 import { authService } from '../services/auth.js';
 import { usersService } from '../services/users.js';
@@ -22,47 +24,47 @@ export async function mountDiagnosticsPage({ container, scope, isStale }) {
     container.innerHTML = `
       <div class="page-header">
         <div>
-          <h1>مختبر فحص العقود والتشخيص الحي (P18)</h1>
-          <p>أداة هندسية لفحص جاهزية الخادم، اختبار قفل تجديد الجلسة المتزامن (E05)، واستعراض سجل العمليات الـ 57 دون تسريب أي توكنات سرية.</p>
+          <h1>${escapeHtml(tr('مختبر فحص العقود والتشخيص الحي (P18)', 'Live API Contract & Diagnostics Lab (P18)'))}</h1>
+          <p>${escapeHtml(tr('أداة هندسية لفحص جاهزية الخادم، اختبار قفل تجديد الجلسة المتزامن (E05)، واستعراض سجل العمليات الـ 57 دون تسريب أي توكنات سرية.', 'Engineering lab to verify server readiness, test the single-flight session refresh mutex (E05), and inspect the 57-endpoint contract registry without exposing secret tokens.'))}</p>
         </div>
         <div class="page-header-actions">
-          <button type="button" id="diag-clear-traces-btn" class="btn btn-sm btn-outline">مسح سجل التتبع</button>
+          <button type="button" id="diag-clear-traces-btn" class="btn btn-sm btn-outline">${renderIcon('trash-2', { size: 14 })} <span>${escapeHtml(tr('مسح سجل التتبع', 'Clear Trace Log'))}</span></button>
         </div>
       </div>
 
-      <div class="stats-grid" style="margin-bottom:1.5rem;">
+      <div class="stats-grid" style="margin-block-end:1.5rem;">
         <div class="stat-card">
-          <div class="stat-label">إجمالي عمليات الـ API المسجلة</div>
+          <div class="stat-label">${escapeHtml(tr('إجمالي عمليات الـ API المسجلة', 'Registered API Operations'))}</div>
           <div class="stat-value">${endpointsList.length} / 57</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">نماذج الطلبات (Request Schemas)</div>
+          <div class="stat-label">${escapeHtml(tr('نماذج الطلبات (Request Schemas)', 'Request Schemas'))}</div>
           <div class="stat-value">${Object.keys(REQUEST_SCHEMAS).length} / 19</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">حقول النماذج المغطاة</div>
+          <div class="stat-label">${escapeHtml(tr('حقول النماذج المغطاة', 'Covered Schema Fields'))}</div>
           <div class="stat-value">${totalSchemaFields} / 92</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">جيل الجلسة (Session Generation)</div>
+          <div class="stat-label">${escapeHtml(tr('جيل الجلسة (Session Generation)', 'Session Generation'))}</div>
           <div class="stat-value mono" style="font-size:var(--text-base);">${Number(state.session?.generation || 0)}</div>
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:1.5rem;">
-        <h3>أزرار الفحص المباشر غير المدمر (Live Non-Destructive Probes)</h3>
+      <div class="card" style="margin-block-end:1.5rem;">
+        <h3>${renderIcon('activity', { size: 16 })} <span>${escapeHtml(tr('أزرار الفحص المباشر غير المدمر (Live Non-Destructive Probes)', 'Live Non-Destructive API Probes'))}</span></h3>
         <div class="page-header-actions">
-          <button type="button" class="btn btn-sm btn-primary" data-run-probe="E01">فحص الحياة GET /health (E01)</button>
-          <button type="button" class="btn btn-sm btn-primary" data-run-probe="E02">فحص الجاهزية GET /health/ready (E02)</button>
-          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E08">فحص الهوية والعضويات GET /auth/me (E08)</button>
-          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E10">فحص الملف الشخصي GET /users/me (E10)</button>
-          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E52">فحص تقنيات المعرض GET /public/technologies (E52)</button>
-          <button type="button" class="btn btn-sm btn-warning" data-run-probe="E05">اختبار تدوير الرمز الآمن POST /auth/refresh (E05 Mutex)</button>
+          <button type="button" class="btn btn-sm btn-primary" data-run-probe="E01">${renderIcon('activity', { size: 14 })} <span>${escapeHtml(tr('فحص الحياة GET /health (E01)', 'Liveness GET /health (E01)'))}</span></button>
+          <button type="button" class="btn btn-sm btn-primary" data-run-probe="E02">${renderIcon('check', { size: 14 })} <span>${escapeHtml(tr('فحص الجاهزية GET /health/ready (E02)', 'Readiness GET /health/ready (E02)'))}</span></button>
+          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E08">${renderIcon('user-check', { size: 14 })} <span>${escapeHtml(tr('فحص الهوية والعضويات GET /auth/me (E08)', 'Identity & Memberships GET /auth/me (E08)'))}</span></button>
+          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E10">${renderIcon('user', { size: 14 })} <span>${escapeHtml(tr('فحص الملف الشخصي GET /users/me (E10)', 'User Profile GET /users/me (E10)'))}</span></button>
+          <button type="button" class="btn btn-sm btn-outline" data-run-probe="E52">${renderIcon('cpu', { size: 14 })} <span>${escapeHtml(tr('فحص تقنيات المعرض GET /public/technologies (E52)', 'Public Technologies GET /public/technologies (E52)'))}</span></button>
+          <button type="button" class="btn btn-sm btn-warning" data-run-probe="E05">${renderIcon('refresh-cw', { size: 14 })} <span>${escapeHtml(tr('اختبار تدوير الرمز الآمن POST /auth/refresh (E05 Mutex)', 'Test Safe Token Rotation POST /auth/refresh (E05 Mutex)'))}</span></button>
         </div>
         ${
           probeOutput
-            ? `<div style="margin-top:0.75rem;">
-                <span class="field-hint">نتيجة آخر فحص مباشر (تم حجب الحقول السرية تلقائياً):</span>
+            ? `<div style="margin-block-start:0.75rem;">
+                <span class="field-hint">${escapeHtml(tr('نتيجة آخر فحص مباشر (تم حجب الحقول السرية تلقائياً):', 'Latest live probe result (secret fields automatically redacted):'))}</span>
                 <pre class="json-viewer">${escapeHtml(JSON.stringify(probeOutput, null, 2))}</pre>
               </div>`
             : ''
@@ -71,35 +73,35 @@ export async function mountDiagnosticsPage({ container, scope, isStale }) {
 
       <div class="split-grid">
         <div class="card">
-          <h3>سجل طلبات الجلسة الحالية (${traces.length}) — X-Request-ID & Latency</h3>
+          <h3>${escapeHtml(tr(`سجل طلبات الجلسة الحالية (${traces.length}) — X-Request-ID & Latency`, `Current Session Request Traces (${traces.length}) — X-Request-ID & Latency`))}</h3>
           ${
             traces.length === 0
-              ? '<p class="field-hint">لم يتم تسجيل طلبات في هذه الجلسة بعد.</p>'
+              ? `<p class="field-hint">${escapeHtml(tr('لم يتم تسجيل طلبات في هذه الجلسة بعد.', 'No requests recorded in this session yet.'))}</p>`
               : `<div class="table-scroll-container">
                   <table class="data-table">
                     <thead>
                       <tr>
-                        <th>الرمز</th>
-                        <th>الطريقة والمسار</th>
-                        <th>الحالة</th>
-                        <th>الزمن</th>
+                        <th>${escapeHtml(tr('الرمز', 'Code'))}</th>
+                        <th>${escapeHtml(tr('الطريقة والمسار', 'Method & Path'))}</th>
+                        <th>${escapeHtml(tr('الحالة', 'Status'))}</th>
+                        <th>${escapeHtml(tr('الزمن', 'Latency'))}</th>
                         <th>X-Request-ID</th>
                       </tr>
                     </thead>
                     <tbody>
                       ${traces
                         .map(
-                          (tr) => `
+                          (traceItem) => `
                         <tr>
-                          <td><span class="badge badge-brand mono">${escapeHtml(tr.code)}</span></td>
-                          <td class="mono">${escapeHtml(tr.method)} ${escapeHtml(tr.path)}</td>
+                          <td><span class="badge badge-brand mono">${escapeHtml(traceItem.code)}</span></td>
+                          <td class="mono">${escapeHtml(traceItem.method)} ${escapeHtml(traceItem.path)}</td>
                           <td>
-                            <span class="badge ${tr.status >= 200 && tr.status < 300 ? 'badge-success' : 'badge-danger'}">
-                              ${tr.status}
+                            <span class="badge ${traceItem.status >= 200 && traceItem.status < 300 ? 'badge-success' : 'badge-danger'}">
+                              ${traceItem.status}
                             </span>
                           </td>
-                          <td class="mono">${tr.durationMs}ms</td>
-                          <td class="mono">${escapeHtml(tr.requestId || '—')}</td>
+                          <td class="mono">${traceItem.durationMs}ms</td>
+                          <td class="mono">${escapeHtml(traceItem.requestId || '—')}</td>
                         </tr>
                       `
                         )
@@ -111,8 +113,8 @@ export async function mountDiagnosticsPage({ container, scope, isStale }) {
         </div>
 
         <div class="card">
-          <h3>سجل العقود الـ 57 الكامل (ENDPOINTS Registry E01–E57)</h3>
-          <div class="table-scroll-container" style="max-height:26rem;overflow-y:auto;">
+          <h3>${escapeHtml(tr('سجل العقود الـ 57 الكامل (ENDPOINTS Registry E01–E57)', 'Complete 57-Operation Registry (ENDPOINTS E01–E57)'))}</h3>
+          <div class="table-scroll-container" style="max-block-size:26rem;overflow-y:auto;">
             <table class="data-table">
               <thead>
                 <tr>
@@ -166,10 +168,16 @@ export async function mountDiagnosticsPage({ container, scope, isStale }) {
               token_redacted: '[REDACTED_FOR_SECURITY]',
             };
           }
-          ui.toast(`نجح تنفيذ الفحص ${probeCode}.`, 'success');
+          ui.toast(
+            tr(`نجح تنفيذ الفحص ${probeCode}.`, `Probe ${probeCode} succeeded.`),
+            'success'
+          );
           renderLab({ probe: probeCode, response: result });
         } catch (err) {
-          ui.toast(err.message || `فشل الفحص ${probeCode}`, 'error');
+          ui.toast(
+            err.message || tr(`فشل الفحص ${probeCode}`, `Probe ${probeCode} failed`),
+            'error'
+          );
           renderLab({ probe: probeCode, error: err.message, status: err.status });
         } finally {
           btn.disabled = false;
@@ -180,4 +188,3 @@ export async function mountDiagnosticsPage({ container, scope, isStale }) {
 
   renderLab();
 }
-

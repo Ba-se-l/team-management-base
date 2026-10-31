@@ -1,4 +1,5 @@
-// static/js/contracts/enums.js — Exact parity with src/database/enums.py
+// static/js/contracts/enums.js — Exact parity with src/database/enums.py + i18n tEnum integration
+import { tEnum } from '../core/i18n.js';
 
 export const UserStatus = Object.freeze({
   ONLINE: 'online',
@@ -98,85 +99,9 @@ export const AuditAction = Object.freeze({
   LOGIN: 'login',
 });
 
-export const ENUM_LABELS = Object.freeze({
-  UserStatus: {
-    online: 'متصل (Online)',
-    offline: 'غير متصل (Offline)',
-    busy: 'مشغول (Busy)',
-  },
-  TeamRole: {
-    admin: 'قائد فريق (Team Admin)',
-    developer: 'مطور (Developer)',
-    viewer: 'مراقب قراءة فقط (Viewer)',
-  },
-  ProjectStatus: {
-    planning: 'تخطيط (Planning)',
-    active: 'نشط قيد التنفيذ (Active)',
-    on_hold: 'معلق مؤقتاً (On Hold)',
-    completed: 'مكتمل (Completed)',
-    archived: 'مؤرشف (Archived)',
-  },
-  ProjectVisibility: {
-    private: 'خاص بالفريق (Private)',
-    pending_review: 'مرشح للمراجعة العامة (Pending Review)',
-    public: 'عام في المعرض (Public Showcase)',
-  },
-  TaskStatus: {
-    todo: 'قائمة الانتظار (To Do)',
-    in_progress: 'قيد التنفيذ (In Progress)',
-    in_review: 'قيد المراجعة (In Review)',
-    done: 'منجزة (Done)',
-    archived: 'مؤرشفة (Archived)',
-  },
-  TaskPriority: {
-    low: 'منخفضة (Low)',
-    medium: 'متوسطة (Medium)',
-    high: 'عالية (High)',
-    critical: 'حرجة (Critical)',
-  },
-  JobTitle: {
-    backend_developer: 'مطور واجهات خلفية (Backend Developer)',
-    frontend_developer: 'مطور واجهات أمامية (Frontend Developer)',
-    fullstack_developer: 'مطور متكامل (Fullstack Developer)',
-    mobile_developer: 'مطور تطبيقات جوال (Mobile Developer)',
-    ui_ux_designer: 'مصمم تجربة وواجهات (UI/UX Designer)',
-    devops_engineer: 'مهندس بنية وأتمتة (DevOps Engineer)',
-    software_engineer: 'مهندس برمجيات (Software Engineer)',
-    student: 'طالب متدرب (Student)',
-  },
-  TechnologyCategory: {
-    language: 'لغة برمجة (Language)',
-    backend: 'إطار خلفي (Backend)',
-    frontend: 'إطار أمامي (Frontend)',
-    mobile: 'تطوير جوال (Mobile)',
-    database: 'قاعدة بيانات (Database)',
-    devops: 'بنية وسحابة (DevOps)',
-    design: 'تصميم (Design)',
-    tool: 'أداة هندسية (Tool)',
-  },
-  InquiryServiceType: {
-    web_app: 'تطبيق ويب متكامل (Web App)',
-    mobile_app: 'تطبيق جوال (Mobile App)',
-    backend_api: 'منظومة API وخوادم (Backend API)',
-    ui_ux: 'تصميم تجربة المستخدم (UI/UX)',
-    consultation: 'استشارة معمارية وتقنية (Consultation)',
-    join_request: 'طلب انضمام للفريق (Join Request)',
-    other: 'أخرى (Other)',
-  },
-  InquiryStatus: {
-    new: 'جديد (New)',
-    in_review: 'قيد المراجعة (In Review)',
-    responded: 'تم الرد (Responded)',
-    converted: 'تم التحويل لمشروع (Converted)',
-    closed: 'مغلق (Closed)',
-    spam: 'مرفوض / مزعج (Spam)',
-  },
-});
-
 export function formatEnumLabel(groupName, value) {
   if (!value) return '—';
-  const group = ENUM_LABELS[groupName];
-  return (group && group[value]) || String(value);
+  return tEnum(groupName, value);
 }
 
 export function getBadgeVariantForValue(value) {
@@ -195,4 +120,3 @@ export function getBadgeVariantForValue(value) {
   }
   return '';
 }
-
