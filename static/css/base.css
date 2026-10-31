@@ -1,0 +1,150 @@
+/* static/css/base.css — Reset, Zero-Overflow Containment, Typography & Accessibility */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-canvas);
+  min-block-size: 100vh;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  overflow-x: clip;
+}
+
+/* The min-inline-size: 0 Law across all Grid/Flex containers & children */
+.public-shell,
+.public-main,
+.workspace-shell,
+.workspace-main,
+.workspace-content,
+.container,
+.card,
+.stat-card,
+.kanban-column,
+.kanban-card,
+.form-grid,
+.form-group,
+.table-scroll-container,
+.modal-dialog,
+.modal-body,
+.drawer-panel,
+.drawer-body,
+.page-header,
+.page-header-actions,
+.filter-bar,
+.alert-banner,
+.user-inline-cell {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+/* Strict Text & Long URL Wrapping to prevent parent box blowout */
+h1, h2, h3, h4, h5, h6,
+p, td, th, a, span, label, code, pre,
+.kanban-card-title,
+.field-hint,
+.field-error {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: var(--text-2xl); }
+h2 { font-size: var(--text-xl); }
+h3 { font-size: var(--text-lg); }
+
+p {
+  color: var(--text-secondary);
+}
+
+a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--brand-primary-hover);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Honeypot trap strictly hidden from humans using logical inset */
+.hp-trap-field {
+  position: absolute !important;
+  inset-inline-start: -9999px !important;
+  inline-size: 1px !important;
+  block-size: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

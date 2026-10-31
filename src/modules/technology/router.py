@@ -5,32 +5,26 @@ Since this is a global dictionary table, endpoints do not strictly
 require team RBAC checks for MVP, but they do require authentication.
 """
 
-from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
 from typing import Annotated
-
+from fastapi import APIRouter, Path, Query, status
 
 from src.conf import settings
-from src.database import get_session
-from src.modules.auth.dependencies import get_current_user
-from src.modules.user import User
-from .schemas import CreateTechnologyRequest, UpdateTechnologyRequest, TechnologyResponse
+from src.share.dependencies import CurrentUserDep, SessionDep, SuperAdminDep
 from . import service
+from .schemas import CreateTechnologyRequest, TechnologyResponse, UpdateTechnologyRequest
 
 router = APIRouter(prefix=f"{settings.API_PREFIX}/technologies", tags=["Technologies"])
 
 
 @router.post(
     "/",
-    response_model=TechnologyResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a technology",
 )
 async def create_technology(
     request: CreateTechnologyRequest,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
+    current_user: SuperAdminDep,
+    session: SessionDep,
 ) -> TechnologyResponse:
     """Creates a new technology entry in the global catalog."""
     tech = await service.create_technology(schema=request, session=session)
@@ -39,16 +33,15 @@ async def create_technology(
 
 @router.get(
     "/search",
-    response_model=list[TechnologyResponse],
     status_code=status.HTTP_200_OK,
     summary="Search technologies",
 )
 async def search_technologies(
     q: Annotated[str, Query(min_length=1)],
+    current_user: CurrentUserDep,
+    session: SessionDep,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
 ) -> list[TechnologyResponse]:
     """Searches the technology catalog by partial name match (case-insensitive)."""
     techs = await service.search_technologies(
@@ -62,15 +55,14 @@ async def search_technologies(
 
 @router.get(
     "/",
-    response_model=list[TechnologyResponse],
     status_code=status.HTTP_200_OK,
     summary="List all technologies",
 )
 async def list_technologies(
+    current_user: CurrentUserDep,
+    session: SessionDep,
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
 ) -> list[TechnologyResponse]:
     """Retrieves a paginated list of all technologies in the catalog."""
     techs = await service.list_technologies(
@@ -83,52 +75,49 @@ async def list_technologies(
 
 @router.get(
     "/{tech_id}",
-    response_model=TechnologyResponse,
     status_code=status.HTTP_200_OK,
     summary="Get technology by ID",
 )
 async def get_technology(
-    tech_id: ID,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
+    tech_id: Annotated[int, Path(ge=1, description="Technology ID")],
+    current_user: CurrentUserDep,
+    session: SessionDep,
 ) -> TechnologyResponse:
-    """Fetches a specific technology by its UUID."""
-    tech = await service._get_technology(tech_id=tech_id, session=session)
+    """Fetches a specific technology by its integer ID."""
+    tech = await service.get_technology(tech_id=tech_id, session=session)
     return TechnologyResponse.model_validate(tech)
 
 
 @router.patch(
     "/{tech_id}",
-    response_model=TechnologyResponse,
     status_code=status.HTTP_200_OK,
     summary="Update a technology",
 )
 async def update_technology(
-    tech_id: ID,
+    tech_id: Annotated[int, Path(ge=1, description="Technology ID")],
     request: UpdateTechnologyRequest,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
+    current_user: SuperAdminDep,
+    session: SessionDep,
 ) -> TechnologyResponse:
     """Updates an existing technology entry."""
     tech = await service.update_technology(
         tech_id=tech_id,
         schema=request,
-        session=session
+        session=session,
     )
     return TechnologyResponse.model_validate(tech)
 
 
 @router.delete(
     "/{tech_id}",
-    response_model=TechnologyResponse,
     status_code=status.HTTP_200_OK,
     summary="Delete a technology",
 )
 async def delete_technology(
-    tech_id: ID,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
+    tech_id: Annotated[int, Path(ge=1, description="Technology ID")],
+    current_user: SuperAdminDep,
+    session: SessionDep,
 ) -> TechnologyResponse:
     """Hard-deletes a technology from the catalog."""
-    tech = await service.delete_technology(tech_id=tech_id, session=session, current_user=current_user)
+    tech = await service.delete_technology(tech_id=tech_id, session=session)
     return TechnologyResponse.model_validate(tech)

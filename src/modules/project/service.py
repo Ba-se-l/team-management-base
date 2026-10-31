@@ -1,217 +1,402 @@
-"""Project domain service layer.
+"""Project domain service orchestrating project creation, updates, and technology mappings."""
 
-Contains business logic for managing projects within teams,
-including creation, update, soft-deletion, and listing.
-"""
-
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
 
-from src.database import UserRoles, ProjectStatus
-from src.modules.user import User
-from src.modules.team_members import TeamMemberRepository, InsufficientRoleException
+from src.database.enums import ProjectStatus, ProjectVisibility, TeamRole
+from src.exc import AlreadyExistsException, ForbiddenException, NotFoundException
+from src.modules.team.repository import TeamRepository
+from src.modules.team_members.repository import TeamMemberRepository
+from src.modules.technology.models import Technology
+from src.modules.user.models import User
+from src.share import AuditEvent, event_bus
+from src.share.helpers import slugify
+from src.share.responses import PageResult
 from .models import Project
-from .schemas import CreateProjectRequest, UpdateProjectRequest
 from .repository import ProjectRepository
-from .exceptions import ProjectNotFoundException
+from .schemas import (
+    CreateProjectRequest,
+    ProjectResponse,
+    ProjectTechnologySummary,
+    UpdateProjectRequest,
+)
 
 
-async def _get_project(project_id: ID, session: AsyncSession) -> Project:
-    """Internal helper: fetches a project by ID or raises.
+def _hydrate_project_with_counts(
+    project: Project,
+    counts: tuple[int, int],
+) -> ProjectResponse:
+    """Builds a ProjectResponse using pre-fetched (total_tasks, completed_tasks) counts."""
+    tech_summaries = [
+        ProjectTechnologySummary.model_validate(tech)
+        for tech in (project.technologies or [])
+    ]
+    resp = ProjectResponse.model_validate(project)
+    resp.technologies = tech_summaries
+    resp.tasks_count = counts[0]
+    resp.tasks_completed_count = counts[1]
+    return resp
 
-    Args:
-        project_id: The UUID of the project to fetch.
-        session: The active database session.
 
-    Returns:
-        The ``Project`` ORM instance.
+async def _hydrate_project_response(project: Project, repo: ProjectRepository) -> ProjectResponse:
+    """Builds a hydrated ProjectResponse including linked technologies and task statistics."""
+    counts = await repo.get_task_counts(project.id)
+    return _hydrate_project_with_counts(project, counts)
 
-    Raises:
-        ProjectNotFoundException: If no project with the given ID exists.
+
+async def _enforce_visibility_policy(
+    actor: User,
+    team_id: int,
+    target_visibility: ProjectVisibility,
+    session: AsyncSession,
+) -> None:
+    """Enforces V1 publication governance on project visibility transitions.
+
+    - PRIVATE: allowed for any authorized project creator/editor.
+    - PENDING_REVIEW: requires Team ADMIN or Super Admin.
+    - PUBLIC: requires Super Admin exclusively.
     """
-    repo = ProjectRepository(session=session)
-    project = await repo.get_by_id(id=project_id)
+    if target_visibility == ProjectVisibility.PRIVATE or actor.is_super_admin:
+        return
 
-    if project is None:
-        raise ProjectNotFoundException(identifier=str(project_id))
+    if target_visibility == ProjectVisibility.PUBLIC:
+        raise ForbiddenException(
+            message="Only a Super Admin can approve and publish a project to public visibility.",
+            error_code="PUBLIC_PUBLISH_REQUIRES_SUPER_ADMIN",
+        )
 
-    return project
+    if target_visibility == ProjectVisibility.PENDING_REVIEW:
+        tm_repo = TeamMemberRepository(session=session)
+        membership = await tm_repo.get_membership(member_id=actor.id, team_id=team_id)
+        if membership is None or not membership.is_active or membership.role != TeamRole.ADMIN:
+            raise ForbiddenException(
+                message="Only a Team Admin or Super Admin can submit a project for public review.",
+                error_code="PENDING_REVIEW_REQUIRES_TEAM_ADMIN",
+            )
 
 
 async def create_project(
-    team_id: ID,
+    team_id: int,
     schema: CreateProjectRequest,
     creator: User,
     session: AsyncSession,
-) -> Project:
-    """Creates a new project within a team.
-
-    Orchestration steps:
-        1. Verify the creator has ADMIN+ role in the team.
-        2. Build the ``Project`` ORM instance.
-        3. Persist the project via ``ProjectRepository.create``.
+) -> ProjectResponse:
+    """Creates a project inside a team workspace, binds tech stack items, and generates slug.
 
     Args:
-        team_id: The UUID of the team that will own the project.
-        schema: The validated project creation request.
-        creator: The authenticated user creating the project.
-        session: The active database session.
+        team_id: Owning team integer ID.
+        schema: Validated project creation request.
+        creator: Authenticated user creating the project.
+        session: Active asynchronous database session.
 
     Returns:
-        The newly created ``Project`` ORM instance.
+        Hydrated ProjectResponse.
 
     Raises:
-        InsufficientRoleException: If the creator lacks ADMIN role.
+        NotFoundException: If team workspace does not exist.
+        AlreadyExistsException: If a project with this slug already exists.
     """
-    project_repo = ProjectRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
+    team_repo = TeamRepository(session=session)
+    team = await team_repo.get_by_id(team_id)
+    if team is None:
+        raise NotFoundException(entity="Team", identifier=team_id)
 
-    # Step 1: Verify creator's role in the team
-    creator_role = await member_repo.get_member_role(member_id=creator.id, team_id=team_id)
-    if creator_role not in {UserRoles.SUPER_ADMIN, UserRoles.ADMIN}:
-        raise InsufficientRoleException('ADMIN')
-
-    # Step 2: Build the ORM model
-    project = Project(
-        title=schema.title,
-        short_description=schema.short_description,
-        deadline=schema.deadline,
-        creator_id=creator.id,
+    await _enforce_visibility_policy(
+        actor=creator,
         team_id=team_id,
-        status=ProjectStatus.TODO,
+        target_visibility=schema.visibility,
+        session=session,
     )
 
-    # Step 3: Persist and return
-    project = await project_repo.create(orm_model=project)
+    project_repo = ProjectRepository(session=session)
+    target_slug = slugify(schema.slug if schema.slug else schema.title)
 
+    existing = await project_repo.get_by_slug(target_slug)
+    if existing is not None:
+        raise AlreadyExistsException(entity="Project", field="slug", value=target_slug)
+
+    project = Project(
+        title=schema.title,
+        slug=target_slug,
+        short_description=schema.short_description,
+        description=schema.description,
+        visibility=schema.visibility,
+        status=schema.status,
+        demo_url=schema.demo_url,
+        repo_url=schema.repo_url,
+        deadline=schema.deadline,
+        team_id=team_id,
+        creator_id=creator.id,
+    )
+
+    if schema.technology_ids:
+        unique_tech_ids = list(dict.fromkeys(schema.technology_ids))
+        stmt = select(Technology).where(Technology.id.in_(unique_tech_ids))
+        result = await session.execute(stmt)
+        technologies = list(result.scalars().all())
+        if len(technologies) != len(unique_tech_ids):
+            found_ids = {t.id for t in technologies}
+            missing = [tid for tid in unique_tech_ids if tid not in found_ids]
+            raise NotFoundException(entity="Technology", identifier=missing[0])
+        project.technologies = technologies
+
+    project = await project_repo.create(project)
     await session.flush()
-    
-    return project
+
+    hydrated = await project_repo.get_by_id_with_techs(project.id)
+
+    await event_bus.publish(
+        AuditEvent(
+            action="PROJECT_CREATED",
+            entity_type="Project",
+            entity_id=str(project.id),
+            user_id=creator.id,
+            changes_payload={"title": project.title, "team_id": project.team_id, "slug": project.slug},
+        ),
+        session=session,
+    )
+
+    return await _hydrate_project_response(hydrated or project, project_repo)
+
+
+async def get_project(
+    identifier: int | str,
+    session: AsyncSession,
+) -> ProjectResponse:
+    """Retrieves a project by integer ID or slug along with technologies and task metrics.
+
+    Args:
+        identifier: Project integer ID or slug string.
+        session: Active asynchronous database session.
+
+    Returns:
+        Hydrated ProjectResponse.
+
+    Raises:
+        NotFoundException: If project is not found.
+    """
+    project_repo = ProjectRepository(session=session)
+    project: Project | None = None
+
+    if isinstance(identifier, int) or (isinstance(identifier, str) and identifier.isdigit()):
+        project = await project_repo.get_by_id_with_techs(int(identifier))
+
+    if project is None and isinstance(identifier, str):
+        project = await project_repo.get_by_slug(identifier)
+
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=identifier)
+
+    return await _hydrate_project_response(project, project_repo)
 
 
 async def update_project(
-    project_id: ID,
+    project_id: int,
     schema: UpdateProjectRequest,
-    current_user: User,
     session: AsyncSession,
-) -> Project:
-    """Updates a project's details.
-
-    Orchestration steps:
-        1. Fetch the project by ID.
-        2. Verify the updater has ADMIN+ role in the project's team.
-        3. Apply the update via repository.
+    current_user: User | None = None,
+) -> ProjectResponse:
+    """Updates project properties and tech stack associations.
 
     Args:
-        project_id: The UUID of the project to update.
-        schema: The validated update request with optional fields.
-        current_user: The authenticated user performing the update.
-        session: The active database session.
+        project_id: Target project integer ID.
+        schema: Validated fields to update.
+        session: Active asynchronous database session.
+        current_user: Optional authenticated user enforcing visibility governance.
 
     Returns:
-        The updated ``Project`` ORM instance.
+        Hydrated updated ProjectResponse.
 
     Raises:
-        ProjectNotFoundException: If the project does not exist.
-        InsufficientRoleException: If the updater lacks ADMIN role.
+        NotFoundException: If project is not found.
+        ForbiddenException: If caller lacks permission to set requested visibility.
     """
     project_repo = ProjectRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
+    project = await project_repo.get_by_id_with_techs(project_id)
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=project_id)
 
-    # Step 1: Fetch the project
-    project = await _get_project(project_id=project_id, session=session)
+    old_visibility = project.visibility
+    update_data = schema.model_dump(exclude_unset=True, exclude={"technology_ids"})
 
-    if project.team_id is None:
-        raise ValueError("Project is not attached to any team.")
+    if (
+        current_user is not None
+        and "visibility" in update_data
+        and schema.visibility is not None
+        and schema.visibility != old_visibility
+    ):
+        await _enforce_visibility_policy(
+            actor=current_user,
+            team_id=project.team_id,
+            target_visibility=schema.visibility,
+            session=session,
+        )
 
-    # Step 2: Verify updater's role
-    updater_role = await member_repo.get_member_role(
-        member_id=current_user.id,
-        team_id=project.team_id,
-    )
-    if updater_role not in {UserRoles.SUPER_ADMIN, UserRoles.ADMIN}:
-        raise InsufficientRoleException('ADMIN')
+    if update_data:
+        project = await project_repo.update(project, update_data)
 
-    # Step 3: Apply the update
-    updated_project = await project_repo.update(
-        orm_model=project,
-        update_data=schema.model_dump(exclude_unset=True),
-    )
+    if "visibility" in update_data and project.visibility != old_visibility:
+        await event_bus.publish(
+            AuditEvent(
+                action="PROJECT_VISIBILITY_CHANGED",
+                entity_type="Project",
+                entity_id=str(project.id),
+                user_id=current_user.id if current_user else None,
+                changes_payload={
+                    "old_visibility": old_visibility.value,
+                    "new_visibility": project.visibility.value,
+                },
+            ),
+            session=session,
+        )
 
-    return updated_project
+    if schema.technology_ids is not None:
+        if schema.technology_ids:
+            unique_tech_ids = list(dict.fromkeys(schema.technology_ids))
+            stmt = select(Technology).where(Technology.id.in_(unique_tech_ids))
+            result = await session.execute(stmt)
+            technologies = list(result.scalars().all())
+            if len(technologies) != len(unique_tech_ids):
+                found_ids = {t.id for t in technologies}
+                missing = [tid for tid in unique_tech_ids if tid not in found_ids]
+                raise NotFoundException(entity="Technology", identifier=missing[0])
+            project.technologies = technologies
+        else:
+            project.technologies = []
+        await session.flush()
+
+    return await _hydrate_project_response(project, project_repo)
 
 
-async def soft_delete_project(
-    project_id: ID,
-    current_user: User,
+async def delete_project(
+    project_id: int,
     session: AsyncSession,
-) -> Project:
-    """Soft-deletes a project by setting ``is_active`` to ``False``.
-
-    Orchestration steps:
-        1. Fetch the project by ID.
-        2. Verify the deleter has SUPER_ADMIN role in the project's team.
-        3. Deactivate the project.
+) -> None:
+    """Deletes a project and cascades deletion to tasks.
 
     Args:
-        project_id: The UUID of the project to delete.
-        current_user: The authenticated user performing the deletion.
-        session: The active database session.
-
-    Returns:
-        The soft-deleted ``Project`` ORM instance.
+        project_id: Target project integer ID.
+        session: Active asynchronous database session.
 
     Raises:
-        ProjectNotFoundException: If the project does not exist.
-        InsufficientRoleException: If the deleter lacks SUPER_ADMIN role.
+        NotFoundException: If project does not exist.
     """
     project_repo = ProjectRepository(session=session)
-    member_repo = TeamMemberRepository(session=session)
+    project = await project_repo.get_by_id(project_id)
+    if project is None:
+        raise NotFoundException(entity="Project", identifier=project_id)
 
-    # Step 1: Fetch the project
-    project = await _get_project(project_id=project_id, session=session)
-
-    if project.team_id is None:
-        raise ValueError("Project is not attached to any team.")
-
-    # Step 2: Verify deleter's role
-    deleter_role = await member_repo.get_member_role(
-        member_id=current_user.id,
-        team_id=project.team_id,
-    )
-    if deleter_role != UserRoles.SUPER_ADMIN:
-        raise InsufficientRoleException('ADMIN')
-
-    # Step 3: Apply the soft delete
-    deleted_project = await project_repo.update(
-        orm_model=project,
-        update_data={'is_active': False},
-    )
-
-    return deleted_project
+    await project_repo.delete(project)
 
 
 async def list_team_projects(
-    team_id: ID,
+    team_id: int,
     session: AsyncSession,
-    skip: int = 0,
+    status: ProjectStatus | None = None,
+    visibility: ProjectVisibility | None = None,
+    offset: int = 0,
     limit: int = 20,
-) -> list[Project]:
-    """Lists all active projects within a specific team.
+) -> PageResult[ProjectResponse]:
+    """Retrieves paginated projects inside a team workspace with optional filters.
 
     Args:
-        team_id: The UUID of the team.
-        session: The active database session.
-        skip: Number of records to skip. Defaults to ``0``.
-        limit: Maximum number of records to return. Defaults to ``20``.
+        team_id: Team integer ID.
+        session: Active asynchronous database session.
+        status: Optional status filter.
+        visibility: Optional visibility filter.
+        offset: Record offset.
+        limit: Limit per page.
 
     Returns:
-        A list of active ``Project`` ORM instances.
+        PageResult of hydrated ProjectResponse instances.
     """
     project_repo = ProjectRepository(session=session)
-
-    return await project_repo.get_team_projects(
+    page = await project_repo.get_team_projects(
         team_id=team_id,
-        skip=skip,
+        status=status,
+        visibility=visibility,
+        offset=offset,
         limit=limit,
+    )
+
+    counts_map = await project_repo.get_batch_task_counts([p.id for p in page.items])
+    items = [
+        _hydrate_project_with_counts(p, counts_map.get(p.id, (0, 0)))
+        for p in page.items
+    ]
+
+    return PageResult(
+        items=items,
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
+    )
+
+
+async def list_accessible_projects(
+    user_id: int,
+    is_super_admin: bool,
+    session: AsyncSession,
+    offset: int = 0,
+    limit: int = 50,
+) -> PageResult[ProjectResponse]:
+    """Retrieves all active projects accessible to a user across their teams.
+
+    Args:
+        user_id: User integer primary key.
+        is_super_admin: Whether the user is a super admin.
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
+
+    Returns:
+        PageResult of hydrated ProjectResponse instances.
+    """
+    project_repo = ProjectRepository(session=session)
+    page = await project_repo.get_accessible_projects(
+        user_id=user_id,
+        is_super_admin=is_super_admin,
+        offset=offset,
+        limit=limit,
+    )
+    counts_map = await project_repo.get_batch_task_counts([p.id for p in page.items])
+    items = [
+        _hydrate_project_with_counts(p, counts_map.get(p.id, (0, 0)))
+        for p in page.items
+    ]
+    return PageResult(
+        items=items,
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
+    )
+
+
+async def list_all_projects(
+    session: AsyncSession,
+    offset: int = 0,
+    limit: int = 50,
+) -> PageResult[ProjectResponse]:
+    """Retrieves all active projects across the workspace with hydration.
+
+    Args:
+        session: Active asynchronous database session.
+        offset: Record offset.
+        limit: Limit per page.
+
+    Returns:
+        PageResult of hydrated ProjectResponse instances.
+    """
+    project_repo = ProjectRepository(session=session)
+    page = await project_repo.list_all_projects(offset=offset, limit=limit)
+    counts_map = await project_repo.get_batch_task_counts([p.id for p in page.items])
+    items = [
+        _hydrate_project_with_counts(p, counts_map.get(p.id, (0, 0)))
+        for p in page.items
+    ]
+    return PageResult(
+        items=items,
+        total=page.total,
+        offset=page.offset,
+        limit=page.limit,
     )

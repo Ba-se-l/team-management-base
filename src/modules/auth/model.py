@@ -43,7 +43,11 @@ class RefreshSession(Base, CreatedAtUpdatedAtMixin):
     )
 
     user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    family_id: Mapped[str] = mapped_column(
+        String(36), index=True, nullable=False
     )
 
     refresh_token_jti: Mapped[str] = mapped_column(
@@ -64,3 +68,4 @@ class RefreshSession(Base, CreatedAtUpdatedAtMixin):
 
     # --- Relationships ---
     user: Mapped["User"] = relationship("User", back_populates="refresh_sessions")
+

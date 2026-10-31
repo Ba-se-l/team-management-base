@@ -1,71 +1,52 @@
-from pydantic import BaseModel, Field, field_validator
+"""Authentication domain request and response Pydantic schemas."""
 
-
-class RegisterRequest(BaseModel):
-    """Schema for user registration request."""
-
-    name: str = Field(..., min_length=1, max_length=100)
-    """The user's full display name."""
-
-    email: str = Field(..., min_length=5, max_length=100, pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
-    """The user's email address. Must be unique across the system."""
-
-    password: str = Field(..., min_length=8, max_length=100)
-    """The user's plain-text password. Will be hashed before storage."""
-
-
-    @field_validator('email', mode='before')
-    @classmethod
-    def normalize_email(cls, v: str) -> str:
-        """Normalizes email to lowercase and strips whitespace.
-
-        Args:
-            v: The raw email string from the request.
-
-        Returns:
-            Lowercase, stripped email string.
-        """
-        return v.strip().lower()
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from src.modules.user.schemas import UserResponse
 
 
 class LoginRequest(BaseModel):
-    """Schema for user login request."""
+    """Schema for user login credentials."""
 
-    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
-    """The user's registered email address."""
+    email: EmailStr = Field()
+    password: str = Field(min_length=1, max_length=128)
 
-    password: str = Field(...)
-    """The user's plain-text password for verification."""
-
-    @field_validator('email', mode='before')
+    @field_validator("email", mode="after")
     @classmethod
-    def normalize_email(cls, v: str) -> str:
-        """Normalizes email to lowercase and strips whitespace.
-
-        Args:
-            v: The raw email string from the request.
-
-        Returns:
-            Lowercase, stripped email string.
-        """
-        return v.strip().lower()
+    def normalize_email(cls, v: EmailStr) -> str:
+        """Normalizes email to lowercase and strips whitespace."""
+        return str(v).strip().lower()
 
 
 class TokenResponse(BaseModel):
-    """Schema for JWT dual-token API responses."""
+    """Schema returned on successful login and token rotation."""
 
     access_token: str
-    """The short-lived JWT access token string."""
-
-    refresh_token: str
-    """The long-lived JWT refresh token string."""
-
-    token_type: str = 'bearer'
-    """The token type. Always ``bearer``."""
+    token_type: str = "bearer"
+    expires_in: int = 1800
+    user: UserResponse
 
 
 class RefreshRequest(BaseModel):
-    """Schema for token refresh request."""
+    """Optional payload for token refresh when HttpOnly cookie is unavailable."""
 
-    refresh_token: str = Field(...)
-    """The current valid refresh token to exchange for new tokens."""
+    refresh_token: str | None = Field(default=None)
+
+
+class UserMeMembershipResponse(BaseModel):
+    """Represents a user's active membership in a team workspace."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    team_id: int
+    team_name: str
+    team_slug: str
+    role: str
+
+
+class UserMeResponse(BaseModel):
+    """Full authenticated user identity profile with workspace memberships."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user: UserResponse
+    memberships: list[UserMeMembershipResponse]

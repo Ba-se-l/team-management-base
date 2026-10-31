@@ -16,7 +16,8 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database import get_session
-from src.core import decode_access_token, InvalidCredentialsException
+from src.exc import InvalidCredentialsException
+from src.security.security import decode_access_token
 from src.conf import settings
 
 if TYPE_CHECKING:
@@ -28,14 +29,14 @@ _oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f'{settings.API_PREFIX}/auth/logi
 
 async def get_current_user(
     token: str = Depends(_oauth2_scheme),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_session, scope="function"),
 ) -> User:
     """Extracts and validates the current authenticated user from the JWT token.
 
     This is a FastAPI dependency injected into every protected route.
     It performs three sequential validations:
     1. Decodes the JWT token and extracts the ``sub`` (user_id) claim.
-    2. Fetches the user from the database by UUID.
+    2. Fetches the user from the database by ID.
     3. Verifies the user exists and is active.
 
     Args:
@@ -56,12 +57,17 @@ async def get_current_user(
     if user_id is None:
         raise InvalidCredentialsException()
 
+    try:
+        parsed_user_id = int(user_id)
+    except (ValueError, TypeError) as exc:
+        raise InvalidCredentialsException("Invalid token subject claim.") from exc
+
     # Lazy import to break module-level circular dependency
     from src.modules.user import UserRepository
     
     # Step 2: Fetch the user from the database
     user_repo = UserRepository(session=session)
-    user = await user_repo.get_by_id(int(user_id))
+    user = await user_repo.get_by_id(parsed_user_id)
 
     if user is None:
         raise InvalidCredentialsException()
@@ -69,5 +75,10 @@ async def get_current_user(
     # Step 3: Verify the user is active
     if not user.is_active:
         raise InvalidCredentialsException()
+
+    # Step 4: Verify token security version matches current credential revision
+    token_sec_ver = payload.get("sec_ver")
+    if token_sec_ver is None or user.security_version != token_sec_ver:
+        raise InvalidCredentialsException("Session credentials have been rotated or revoked.")
 
     return user

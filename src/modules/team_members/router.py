@@ -1,111 +1,93 @@
-"""Team Members domain router.
+"""Team member domain router enforcing scoped Casbin authorization."""
 
-Provides HTTP endpoints for managing team memberships.
-These endpoints are nested under the ``/teams/{team_id}/members`` path.
-"""
-
-from fastapi import APIRouter, Depends, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from uuid import UUID as ID
 from typing import Annotated
+from fastapi import APIRouter, Depends, Path, Query, status
 
 from src.conf import settings
-from src.database import get_session
-from src.modules.auth.dependencies import get_current_user
-from src.modules.user import User
-from .schemas import AddMemberRequest, UpdateMemberRoleRequest, MemberResponse
+from src.security.guards import require_team_permission
+from src.share.dependencies import SessionDep
+from src.share.responses import PageResult
 from . import service
+from .schemas import AddMemberRequest, MemberResponse, UpdateMemberRoleRequest
 
-router = APIRouter(prefix=settings.API_PREFIX + "/teams/{team_id}/members", tags=["Team Members"])
-
+router = APIRouter(prefix=f"{settings.API_PREFIX}/teams/{{team_id}}/members", tags=["Team Members"])
 
 
 @router.post(
-    "/",
-    response_model=MemberResponse,
+    "",
     status_code=status.HTTP_201_CREATED,
-    summary="Add a member to the team",
+    summary="Add member to team workspace",
+    dependencies=[Depends(require_team_permission("member", "create"))],
 )
 async def add_member(
-    team_id: ID,
+    team_id: Annotated[int, Path(ge=1, description="Team ID")],
     request: AddMemberRequest,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> MemberResponse:
-    """Adds a new member to the team. Requires ADMIN+ role."""
-    membership = await service.add_member(
+    """Enrolls a developer into the team workspace. Requires ADMIN permission."""
+    return await service.add_member(
         team_id=team_id,
         schema=request,
-        adder=current_user,
         session=session,
     )
-    return MemberResponse.model_validate(membership)
 
 
 @router.get(
-    "/",
-    response_model=list[MemberResponse],
+    "",
     status_code=status.HTTP_200_OK,
-    summary="List team members",
+    summary="List team workspace members",
+    dependencies=[Depends(require_team_permission("member", "read"))],
 )
 async def list_members(
-    team_id: ID,
-    skip: Annotated[int, Query(ge=0)] = 0,
+    team_id: Annotated[int, Path(ge=1, description="Team ID")],
+    session: SessionDep,
+    offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    current_user: User = Depends(get_current_user),  # Enforce auth
-    session: AsyncSession = Depends(get_session),
-) -> list[MemberResponse]:
-    """Retrieves a paginated list of all members in the specified team."""
-    members = await service.list_team_members(
+) -> PageResult[MemberResponse]:
+    """Retrieves paginated members enrolled in the specified team workspace."""
+    return await service.list_team_members(
         team_id=team_id,
         session=session,
-        skip=skip,
+        offset=offset,
         limit=limit,
     )
-    return [MemberResponse.model_validate(m) for m in members]
 
 
 @router.patch(
     "/{user_id}",
-    response_model=MemberResponse,
     status_code=status.HTTP_200_OK,
-    summary="Update a member's role",
+    summary="Update a team member's role",
+    dependencies=[Depends(require_team_permission("member", "update"))],
 )
 async def update_member_role(
-    team_id: ID,
-    user_id: ID,
+    team_id: Annotated[int, Path(ge=1, description="Team ID")],
+    user_id: Annotated[int, Path(ge=1, description="Target User ID")],
     request: UpdateMemberRoleRequest,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: SessionDep,
 ) -> MemberResponse:
-    """Updates the role of a team member. Requires SUPER_ADMIN role."""
-    membership = await service.update_member_role(
+    """Modifies a member's role with last-administrator protection."""
+    return await service.update_member_role(
         team_id=team_id,
         user_id=user_id,
         schema=request,
-        updater=current_user,
         session=session,
     )
-    return MemberResponse.model_validate(membership)
 
 
 @router.delete(
     "/{user_id}",
-    response_model=MemberResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Remove a member from the team",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a member from the team workspace",
+    dependencies=[Depends(require_team_permission("member", "delete"))],
 )
 async def remove_member(
-    team_id: ID,
-    user_id: ID,
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> MemberResponse:
-    """Removes a member from the team. Requires ADMIN+ role."""
-    membership = await service.remove_member(
+    team_id: Annotated[int, Path(ge=1, description="Team ID")],
+    user_id: Annotated[int, Path(ge=1, description="Target User ID")],
+    session: SessionDep,
+) -> None:
+    """Removes a member from the team with last-administrator protection."""
+    await service.remove_member(
         team_id=team_id,
         user_id=user_id,
-        remover=current_user,
         session=session,
     )
-    return MemberResponse.model_validate(membership)

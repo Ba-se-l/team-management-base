@@ -1,0 +1,81 @@
+/* static/css/tokens.css — High-Contrast Light Design System Tokens (WCAG AA & Bilingual) */
+:root {
+  /* Light Surfaces (Zero glassmorphism / Zero backdrop-filter) */
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-muted: #e2e8f0;
+  --bg-elevated: #ffffff;
+  --bg-overlay: rgba(15, 23, 42, 0.48);
+
+  /* High-Contrast Typography Colors */
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --text-on-brand: #ffffff;
+
+  /* Borders & Focus Ring */
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.28);
+
+  /* Primary Brand Palette */
+  --brand-primary: #2563eb;
+  --brand-primary-hover: #1d4ed8;
+  --brand-primary-active: #1e40af;
+  --brand-soft: #eff6ff;
+  --brand-border: #bfdbfe;
+
+  /* Semantic Status Palettes */
+  --status-success-fg: #15803d;
+  --status-success-bg: #f0fdf4;
+  --status-success-border: #bbf7d0;
+
+  --status-warning-fg: #b45309;
+  --status-warning-bg: #fffbeb;
+  --status-warning-border: #fde68a;
+
+  --status-danger-fg: #b91c1c;
+  --status-danger-bg: #fef2f2;
+  --status-danger-border: #fecaca;
+
+  --status-info-fg: #0369a1;
+  --status-info-bg: #f0f9ff;
+  --status-info-border: #bae6fd;
+
+  --status-neutral-fg: #334155;
+  --status-neutral-bg: #f1f5f9;
+  --status-neutral-border: #cbd5e1;
+
+  /* Harmonious Bilingual Font Stack (Arabic & Latin) */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Tahoma, "Arabic UI Display", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --text-xs: clamp(0.75rem, 0.72rem + 0.15vw, 0.8125rem);
+  --text-sm: clamp(0.84rem, 0.8rem + 0.2vw, 0.9rem);
+  --text-base: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  --text-lg: clamp(1.05rem, 1rem + 0.3vw, 1.2rem);
+  --text-xl: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+  --text-2xl: clamp(1.5rem, 1.35rem + 0.8vw, 2rem);
+  --text-3xl: clamp(1.85rem, 1.6rem + 1.1vw, 2.5rem);
+
+  /* Avatar Dimensions */
+  --avatar-xs: 1.65rem;
+  --avatar-sm: 2rem;
+  --avatar-md: 2.35rem;
+  --avatar-lg: 3rem;
+  --avatar-xl: 4.5rem;
+
+  /* Layout & Elevation */
+  --sidebar-width: 17.5rem;
+  --header-height: 4rem;
+  --container-max: 84rem;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.07);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 16px 36px rgba(15, 23, 42, 0.16);
+}

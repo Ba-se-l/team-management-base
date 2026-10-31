@@ -1,58 +1,65 @@
 from typing import TYPE_CHECKING
-from sqlalchemy import Integer, String, ForeignKey, Boolean
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-
-from src.database import Base
-from src.database import CreatedAtUpdatedAtMixin
-
+from src.database import Base, CreatedAtUpdatedAtMixin
 
 if TYPE_CHECKING:
+    from src.modules.project import Project
     from src.modules.team_members import TeamMember
     from src.modules.user import User
-    from src.modules.project import Project
 
 
 class Team(Base, CreatedAtUpdatedAtMixin):
-    __tablename__ = 'teams'
+    """Team workspace representing an engineering division or project pod."""
+
+    __tablename__ = "teams"
 
     # ======================
     # ==== MAIN COLUMNS ====
     # ======================
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    name: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    description: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
 
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
 
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # ======================
     # === RELATIONSHIPS ====
     # ======================
-    creator_id: Mapped[int | None] = mapped_column(ForeignKey('users.id', ondelete='SET NULL'))
-
-    created_by: Mapped['User'] = relationship(
-        'User',
-        back_populates='teams_established',
-        foreign_keys=[creator_id]
+    creator_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
-
-    projects: Mapped[list['Project']] = relationship(
-        'Project',
-        back_populates='team',
-        foreign_keys='Project.team_id'
+    created_by: Mapped["User | None"] = relationship(
+        "User",
+        back_populates="teams_established",
+        foreign_keys=[creator_id],
     )
 
-    
-    members: Mapped[list['TeamMember']] = relationship(
-        'TeamMember',
-        back_populates='team',
-        cascade='all, delete-orphan'
+    projects: Mapped[list["Project"]] = relationship(
+        "Project",
+        back_populates="team",
+        cascade="all, delete-orphan",
     )
 
+    members: Mapped[list["TeamMember"]] = relationship(
+        "TeamMember",
+        back_populates="team",
+        cascade="all, delete-orphan",
+    )
 
-    def __repr__(self):
-        return f"Team(id={self.id}, name={self.name}, is_active={self.is_active})"
+    def __init__(self, **kwargs) -> None:
+        from src.share.helpers import slugify
+
+        if "name" in kwargs and "slug" not in kwargs:
+            kwargs["slug"] = slugify(kwargs["name"])
+        super().__init__(**kwargs)
+
+    def __repr__(self) -> str:
+        return f"Team(id={self.id}, slug='{self.slug}', name='{self.name}')"

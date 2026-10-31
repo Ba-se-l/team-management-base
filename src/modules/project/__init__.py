@@ -1,25 +1,44 @@
 """Project module public API.
 
-Exposes ORM models, exceptions, repositories, and the FastAPI routers.
+Exposes ORM models, exceptions, repositories, and the FastAPI routers via PEP 562.
 """
 
+import importlib
+from typing import Any
+
+from .exceptions import ProjectInactiveException, ProjectNotFoundException
 from .models import Project
 from .repository import ProjectRepository
-from .exceptions import ProjectNotFoundException, ProjectInactiveException
-from .router import team_nested_router, top_level_router
+from .schemas import (
+    CreateProjectRequest,
+    ProjectResponse,
+    ProjectTechnologySummary,
+    UpdateProjectRequest,
+)
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy imports router dependencies to prevent package-level circular imports (PEP 562)."""
+    if name in ("team_nested_router", "top_level_router"):
+        mod = importlib.import_module(f"{__name__}.router")
+        return getattr(mod, name)
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 
 __all__ = (
     # from models.py
-    'Project',
-
+    "Project",
     # from repository.py
-    'ProjectRepository',
-
+    "ProjectRepository",
     # from exceptions.py
-    'ProjectNotFoundException',
-    'ProjectInactiveException',
-
-    # from router.py
-    'team_nested_router',
-    'top_level_router',
+    "ProjectNotFoundException",
+    "ProjectInactiveException",
+    # from schemas.py
+    "CreateProjectRequest",
+    "UpdateProjectRequest",
+    "ProjectResponse",
+    "ProjectTechnologySummary",
+    # from router.py (PEP 562)
+    "team_nested_router",
+    "top_level_router",
 )

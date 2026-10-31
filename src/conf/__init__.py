@@ -1,7 +1,8 @@
-from .settings import settings
+"""Configuration package facade."""
 
+from .settings import EnvSettings, settings
 
-__all__ = [
-    # from settings.py
-    'settings'
-]
+__all__ = (
+    "EnvSettings",
+    "settings",
+)
